@@ -1,0 +1,12 @@
+docling
+fastapi
+uvicorn
+qdrant-client
+sentence-transformers
+markdown-it-py
+pydantic-settings
+python-dotenv
+flashrank
+pydantic
+requests
+loguru
