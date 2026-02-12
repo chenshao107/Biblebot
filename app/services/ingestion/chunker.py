@@ -7,7 +7,7 @@ import json
 from app.core.config import settings
 
 class MarkdownChunker:
-    def __init__(self, chunk_size: int = 600, chunk_overlap: int = 100):
+    def __init__(self, chunk_size: int = 800, chunk_overlap: int = 150):
         self.md = MarkdownIt()
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -85,7 +85,50 @@ class MarkdownChunker:
         md = re.sub(r"^#{5,6}\s+", "#### ", md, flags=re.MULTILINE)
         # Remove excessive empty lines
         md = re.sub(r"\n{3,}", "\n\n", md)
+        
+        # 过滤掉纯目录部分（密集的链接列表）
+        md = self._filter_toc_section(md)
+        
         return md
+    
+    def _filter_toc_section(self, md: str) -> str:
+        """
+        检测并过滤掉纯目录部分（Table of Contents）
+        判断标准：连续多行都是链接，且链接密度超过80%
+        """
+        lines = md.split('\n')
+        filtered_lines = []
+        in_toc = False
+        consecutive_link_lines = 0
+        
+        for i, line in enumerate(lines):
+            # 检测是否是目录标识行
+            if 'table of contents' in line.lower() or '**table of contents**' in line.lower():
+                in_toc = True
+                continue
+            
+            # 计算当前行的链接密度
+            if line.strip():
+                link_count = line.count('](http')
+                line_length = len(line)
+                
+                if link_count > 3 and line_length > 100:
+                    consecutive_link_lines += 1
+                else:
+                    consecutive_link_lines = 0
+                    
+                # 如果连续10行都是密集链接，判定为目录区域
+                if consecutive_link_lines >= 10:
+                    in_toc = True
+                elif consecutive_link_lines == 0 and in_toc:
+                    # 遇到非链接行，目录区域结束
+                    in_toc = False
+            
+            # 非目录部分保留
+            if not in_toc:
+                filtered_lines.append(line)
+        
+        return '\n'.join(filtered_lines)
 
     def _split_by_headers(self, md: str) -> List[Dict[str, str]]:
         # Regex to match headers
@@ -116,6 +159,19 @@ class MarkdownChunker:
     def _sliding_window(self, text: str, size: int, overlap: int) -> List[str]:
         if not text:
             return []
+        
+        # 检测是否包含代码块
+        has_code_blocks = '```' in text
+        
+        if not has_code_blocks:
+            # 无代码块，使用原逻辑
+            return self._simple_sliding_window(text, size, overlap)
+        
+        # 有代码块，需要智能切分
+        return self._smart_split_with_code_blocks(text, size, overlap)
+    
+    def _simple_sliding_window(self, text: str, size: int, overlap: int) -> List[str]:
+        """简单的滑动窗口切分"""
         chunks = []
         start = 0
         while start < len(text):
@@ -124,4 +180,48 @@ class MarkdownChunker:
             start += size - overlap
             if end >= len(text):
                 break
+        return chunks
+    
+    def _smart_split_with_code_blocks(self, text: str, size: int, overlap: int) -> List[str]:
+        """
+        智能切分：保证代码块不被截断
+        策略：如果代码块大小超过chunk_size，则单独保留整个代码块
+        """
+        chunks = []
+        code_block_pattern = re.compile(r'```[\s\S]*?```', re.MULTILINE)
+        
+        # 找到所有代码块的位置
+        code_blocks = []
+        for match in code_block_pattern.finditer(text):
+            code_blocks.append((match.start(), match.end()))
+        
+        if not code_blocks:
+            return self._simple_sliding_window(text, size, overlap)
+        
+        # 按照代码块边界切分
+        current_pos = 0
+        
+        for code_start, code_end in code_blocks:
+            # 处理代码块之前的文本
+            if code_start > current_pos:
+                before_text = text[current_pos:code_start]
+                if len(before_text) > size:
+                    chunks.extend(self._simple_sliding_window(before_text, size, overlap))
+                elif before_text.strip():
+                    chunks.append(before_text)
+            
+            # 处理代码块：即使超过size也保留完整
+            code_block = text[code_start:code_end]
+            chunks.append(code_block)
+            
+            current_pos = code_end
+        
+        # 处理最后一个代码块之后的文本
+        if current_pos < len(text):
+            after_text = text[current_pos:]
+            if len(after_text) > size:
+                chunks.extend(self._simple_sliding_window(after_text, size, overlap))
+            elif after_text.strip():
+                chunks.append(after_text)
+        
         return chunks
