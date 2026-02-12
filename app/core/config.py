@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     # 词嵌入 (Embedding) 配置
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-base-zh-v1.5"
+    EMBEDDING_DIM: int = 768
     USE_EMBEDDING_API: bool = False
     EMBEDDING_API_KEY: Optional[str] = None
     EMBEDDING_API_URL: str = "https://api.siliconflow.cn/v1/embeddings"

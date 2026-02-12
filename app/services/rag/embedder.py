@@ -77,7 +77,5 @@ class HybridEmbedder:
 
     def get_dim(self) -> int:
         if self.use_api:
-            # Common dimensions: BGE-M3 (1024), OpenAI (1536)
-            # You can also make this a config
-            return 1024 if "bge-m3" in settings.EMBEDDING_MODEL_NAME.lower() else 768
+            return settings.EMBEDDING_DIM
         return self.dense_model.get_sentence_embedding_dimension()
