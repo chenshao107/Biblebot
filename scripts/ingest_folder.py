@@ -44,13 +44,24 @@ def main():
             # 2. Chunk
             doc_id = file_path.name
             chunks = chunker.chunk(md_content, doc_id)
+            chunker.save_chunks(chunks, doc_id)  # 保存切块中间文件
             
             # 3. Embed & Prepare Points
             points = []
+            embedding_metadata = []  # 用于保存嵌入元数据
             for i, chunk in enumerate(chunks):
                 content = chunk["content"]
                 dense_vec = embedder.embed_dense(content)
                 sparse_vec = embedder.embed_sparse(content)
+                
+                # 收集嵌入元数据
+                embedding_metadata.append({
+                    "chunk_index": i,
+                    "dense_dim": len(dense_vec),
+                    "sparse_indices_count": len(sparse_vec["indices"]),
+                    "content_length": len(content),
+                    "content_preview": content[:200] + "..." if len(content) > 200 else content
+                })
                 
                 points.append(models.PointStruct(
                     id=hash(f"{doc_id}_{i}") & 0xFFFFFFFFFFFFFFFF, # Simple int64 hash
@@ -67,7 +78,10 @@ def main():
                     }
                 ))
             
-            # 4. Upsert
+            # 4. Save Embedding Metadata
+            embedder.save_embedding_metadata(doc_id, embedding_metadata)
+            
+            # 5. Upsert
             storage.upsert_chunks(points)
             logger.info(f"Successfully ingested {file_path.name}")
             

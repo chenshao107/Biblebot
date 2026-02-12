@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     BASE_DIR: str = "."
     DATA_RAW_DIR: str = "data/raw"
     DATA_CANONICAL_DIR: str = "data/canonical_md"
+    DATA_CHUNKS_DIR: str = "data/chunks"  # 切块中间文件
+    DATA_EMBEDDINGS_DIR: str = "data/embeddings"  # 嵌入向量元数据
+    
+    # 中间文件保存配置
+    SAVE_INTERMEDIATE_FILES: bool = True  # 是否保存中间文件用于调优
 
     # Pydantic 配置：自动读取 .env 文件
     model_config = SettingsConfigDict(

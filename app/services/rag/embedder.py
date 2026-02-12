@@ -5,6 +5,8 @@ import numpy as np
 from loguru import logger
 from app.core.config import settings
 import re
+import json
+from pathlib import Path
 from collections import Counter
 
 class HybridEmbedder:
@@ -79,3 +81,30 @@ class HybridEmbedder:
         if self.use_api:
             return settings.EMBEDDING_DIM
         return self.dense_model.get_sentence_embedding_dimension()
+
+    def save_embedding_metadata(self, doc_id: str, chunks_embeddings: List[Dict[str, Any]]):
+        """
+        Saves embedding metadata for tuning reference.
+        chunks_embeddings: List of {chunk_index, dense_dim, sparse_indices_count, content_preview}
+        """
+        if not settings.SAVE_INTERMEDIATE_FILES:
+            return
+            
+        output_dir = Path(settings.DATA_EMBEDDINGS_DIR)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        output_path = output_dir / f"{Path(doc_id).stem}_embeddings.json"
+        
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "doc_id": doc_id,
+                "embedding_model": settings.EMBEDDING_MODEL_NAME,
+                "use_api": self.use_api,
+                "dense_dim": self.get_dim(),
+                "sparse_vocab_size": self.sparse_vocab_size,
+                "total_chunks": len(chunks_embeddings),
+                "chunks": chunks_embeddings
+            }, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"Saved embedding metadata to {output_path}")
+        return output_path

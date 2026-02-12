@@ -1,7 +1,10 @@
 from typing import List, Dict, Any
 from markdown_it import MarkdownIt
 from loguru import logger
+from pathlib import Path
 import re
+import json
+from app.core.config import settings
 
 class MarkdownChunker:
     def __init__(self, chunk_size: int = 600, chunk_overlap: int = 100):
@@ -51,6 +54,31 @@ class MarkdownChunker:
                 })
         
         return chunks
+
+    def save_chunks(self, chunks: List[Dict[str, Any]], doc_id: str):
+        """
+        Saves the chunks to JSON file for tuning reference.
+        """
+        if not settings.SAVE_INTERMEDIATE_FILES:
+            return
+            
+        output_dir = Path(settings.DATA_CHUNKS_DIR)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        output_path = output_dir / f"{Path(doc_id).stem}_chunks.json"
+        
+        # Save with pretty formatting for readability
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "doc_id": doc_id,
+                "total_chunks": len(chunks),
+                "chunk_size": self.chunk_size,
+                "chunk_overlap": self.chunk_overlap,
+                "chunks": chunks
+            }, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"Saved {len(chunks)} chunks to {output_path}")
+        return output_path
 
     def _normalize_md(self, md: str) -> str:
         # Flatten deep headers to h4
