@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     QDRANT_PORT: int = 6333
     QDRANT_COLLECTION_NAME: str = "kb_hybrid"
 
-    # LLM & API 配置
+    # LLM 配置
     LLM_API_KEY: Optional[str] = None
     LLM_BASE_URL: str = "https://api.deepseek.com/v1"
     LLM_MODEL: str = "deepseek-chat"
@@ -15,11 +15,13 @@ class Settings(BaseSettings):
     # 词嵌入 (Embedding) 配置
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-base-zh-v1.5"
     USE_EMBEDDING_API: bool = False
+    EMBEDDING_API_KEY: Optional[str] = None
     EMBEDDING_API_URL: str = "https://api.siliconflow.cn/v1/embeddings"
 
     # 重排 (Rerank) 配置
     RERANK_MODEL_NAME: str = "ms-marco-MiniLM-L-6-v2"
     USE_RERANK_API: bool = False
+    RERANK_API_KEY: Optional[str] = None
     RERANK_API_URL: str = "https://api.siliconflow.cn/v1/rerank"
     
     # 路径配置

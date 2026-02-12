@@ -31,7 +31,7 @@ class HybridEmbedder:
         """Calls Cloud API for dense embedding."""
         try:
             headers = {
-                "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                "Authorization": f"Bearer {settings.EMBEDDING_API_KEY}",
                 "Content-Type": "application/json"
             }
             payload = {

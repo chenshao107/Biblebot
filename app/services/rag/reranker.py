@@ -45,7 +45,7 @@ class HybridReranker:
         """Calls Cloud API for reranking."""
         try:
             headers = {
-                "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                "Authorization": f"Bearer {settings.RERANK_API_KEY}",
                 "Content-Type": "application/json"
             }
             # SiliconFlow rerank format
