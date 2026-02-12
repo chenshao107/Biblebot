@@ -56,14 +56,22 @@ class HybridEmbedder:
         tokens = self._tokenize(text)
         counts = Counter(tokens)
         
-        indices = []
-        values = []
+        # 使用字典来处理哈希冲突，合并相同index的值
+        index_value_map = {}
         
         for token, count in counts.items():
             # Simple hashing to map tokens to a fixed index space
             idx = hash(token) % self.sparse_vocab_size
-            indices.append(idx)
-            values.append(float(count))
+            # 如果index已存在，累加值（处理哈希冲突）
+            if idx in index_value_map:
+                index_value_map[idx] += float(count)
+            else:
+                index_value_map[idx] = float(count)
+        
+        # 转换为排序的列表（Qdrant要求indices有序）
+        sorted_items = sorted(index_value_map.items())
+        indices = [idx for idx, _ in sorted_items]
+        values = [val for _, val in sorted_items]
             
         return {
             "indices": indices,
