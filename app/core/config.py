@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     BASH_TOOL_TIMEOUT: int = 30  # Bash 命令超时时间（秒）
     PYTHON_TOOL_TIMEOUT: int = 30  # Python 执行超时时间（秒）
     BASH_WORK_DIR: str = None  # Bash 工具工作目录，默认为 DATA_RAW_DIR
+    
+    # Docker 沙箱配置
+    USE_DOCKER_SANDBOX: bool = True  # 是否使用 Docker 沙箱（推荐）
+    DOCKER_SANDBOX_IMAGE: str = "rag-sandbox:latest"  # 沙箱镜像名
+    DOCKER_MEMORY_LIMIT: str = "512m"  # Docker 内存限制
+    DOCKER_CPU_QUOTA: int = 100000  # Docker CPU 限制（100000 = 1核）
+    DOCKER_TIMEOUT: int = 60  # Docker 命令执行超时（秒）
 
     # Pydantic 配置：自动读取 .env 文件
     model_config = SettingsConfigDict(

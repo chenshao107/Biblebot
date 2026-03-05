@@ -10,3 +10,6 @@ flashrank
 pydantic
 requests
 loguru
+
+# Docker 沙箱支持
+docker
