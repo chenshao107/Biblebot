@@ -12,11 +12,20 @@ class MarkdownChunker:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
-    def chunk(self, md_content: str, doc_id: str) -> List[Dict[str, Any]]:
+    def chunk(self, md_content: str, doc_id: str, path_info: dict = None) -> List[Dict[str, Any]]:
         """
         Chunks markdown content based on headers and size.
+        
+        Args:
+            md_content: Markdown 内容
+            doc_id: 文档 ID（使用相对路径，如 RK3506/uboot/README.md）
+            path_info: 路径信息字典，包含 category, subcategory, full_path
         """
         logger.info(f"Chunking document {doc_id}...")
+        
+        # 使用路径信息或从 doc_id 解析
+        if path_info is None:
+            path_info = self._extract_path_info(doc_id)
         
         # Normalize markdown first
         content = self._normalize_md(md_content)
@@ -29,6 +38,16 @@ class MarkdownChunker:
             section_content = section['content']
             section_title = section['title']
             
+            # 构建元数据
+            metadata = {
+                "doc_id": doc_id,
+                "category": path_info.get("category", "unknown"),
+                "subcategory": path_info.get("subcategory", ""),
+                "full_path": path_info.get("full_path", doc_id),
+                "section": section_title,
+                "chunk_index": len(chunks),
+            }
+            
             # If section is too large, sub-chunk it
             if len(section_content) > self.chunk_size:
                 sub_chunks = self._sliding_window(section_content, self.chunk_size, self.chunk_overlap)
@@ -36,8 +55,7 @@ class MarkdownChunker:
                     chunks.append({
                         "content": f"{section_title}\n{sub}",
                         "metadata": {
-                            "doc_id": doc_id,
-                            "section": section_title,
+                            **metadata,
                             "chunk_index": len(chunks),
                             "is_subchunk": True
                         }
@@ -46,14 +64,31 @@ class MarkdownChunker:
                 chunks.append({
                     "content": section_content,
                     "metadata": {
-                        "doc_id": doc_id,
-                        "section": section_title,
+                        **metadata,
                         "chunk_index": len(chunks),
                         "is_subchunk": False
                     }
                 })
         
+        logger.info(f"Created {len(chunks)} chunks for {doc_id} (category: {path_info.get('category', 'unknown')})")
         return chunks
+    
+    def _extract_path_info(self, doc_id: str) -> dict:
+        """从 doc_id (相对路径) 提取路径信息"""
+        parts = doc_id.split('/')
+        
+        if len(parts) == 1:
+            return {
+                "category": "root",
+                "subcategory": "",
+                "full_path": doc_id
+            }
+        else:
+            return {
+                "category": parts[0],
+                "subcategory": '/'.join(parts[1:-1]) if len(parts) > 2 else "",
+                "full_path": doc_id
+            }
 
     def save_chunks(self, chunks: List[Dict[str, Any]], doc_id: str):
         """

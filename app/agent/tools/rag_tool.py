@@ -76,20 +76,48 @@ class RAGTool(BaseTool):
                     score = getattr(r, "score", 0)
                     meta = getattr(r, "meta", {})
                 
+                # 提取元数据
                 doc_id = meta.get("doc_id", "未知")
+                category = meta.get("category", "")
+                subcategory = meta.get("subcategory", "")
+                full_path = meta.get("full_path", doc_id)
                 section = meta.get("section", "")
                 
+                # 构建来源信息
+                source_info = f"📁 {full_path}"
+                if category and category != "root":
+                    source_info += f" | 分类: {category}"
+                    if subcategory:
+                        source_info += f"/{subcategory}"
+                if section and section != "Root":
+                    source_info += f" | 章节: {section}"
+                
                 output_parts.append(
-                    f"[{i}] 来源: {doc_id} | {section}\n"
-                    f"相关度: {score:.3f}\n"
-                    f"内容:\n{content}\n"
+                    f"[{i}] {source_info}\n"
+                    f"   相关度: {score:.3f}\n"
+                    f"   内容:\n{content}\n"
                 )
             
             output = "\n---\n".join(output_parts)
             
+            # 添加分类统计
+            categories = set()
+            for r in results:
+                if isinstance(r, dict):
+                    meta = r.get("payload", {})
+                else:
+                    meta = getattr(r, "meta", {})
+                cat = meta.get("category", "")
+                if cat and cat != "root":
+                    categories.add(cat)
+            
+            category_hint = ""
+            if categories:
+                category_hint = f"\n📊 涉及分类: {', '.join(sorted(categories))}\n"
+            
             return ToolResult(
                 success=True,
-                output=f"找到 {len(results)} 条相关结果:\n\n{output}"
+                output=f"找到 {len(results)} 条相关结果:{category_hint}\n{output}"
             )
             
         except Exception as e:

@@ -2,6 +2,4 @@ venv
 __pycache__
 
 # 数据目录（可根据需要调整）
-data/chunks/
-data/embeddings/
-data/canonical_md/
+data
