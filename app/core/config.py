@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     EMBEDDING_API_RETRY_DELAY: int = 2  # 重试间隔（秒）
 
     # 重排 (Rerank) 配置
+    # 智能启用：当检索结果数量超过 top_k 时自动启用 rerank
     RERANK_MODEL_NAME: str = "ms-marco-MiniLM-L-6-v2"
-    USE_RERANK_API: bool = False
     RERANK_API_KEY: Optional[str] = None
     RERANK_API_URL: str = "https://api.siliconflow.cn/v1/rerank"
     

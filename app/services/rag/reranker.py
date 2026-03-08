@@ -5,13 +5,15 @@ from loguru import logger
 from app.core.config import settings
 
 class HybridReranker:
+    """
+    智能 Reranker：当检索结果数量超过 top_k 时自动启用 rerank
+    无需配置，自动根据结果数量决定是否精排
+    """
+    
     def __init__(self):
-        self.use_api = settings.USE_RERANK_API
-        self.enabled = settings.USE_RERANK_API  # 当 False 时完全跳过 rerank
-        
-        if not self.enabled:
-            logger.info("Rerank 已禁用，将直接返回向量检索结果")
-            return
+        # 优先使用 API，如果配置完整则使用云 API，否则使用本地模型
+        self.use_api = bool(settings.RERANK_API_KEY and settings.RERANK_API_URL 
+                           and settings.RERANK_API_KEY != "your_api_key_here")
         
         if self.use_api:
             logger.info(f"Using Cloud API for Rerank: {settings.RERANK_API_URL}")
@@ -23,13 +25,14 @@ class HybridReranker:
     def rerank(self, query: str, passages: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str, Any]]:
         """
         Reranks the retrieved passages based on the query.
+        智能启用策略：当 passages 数量超过 top_k 时才启用 rerank
         """
         if not passages:
             return []
         
-        # 如果 rerank 被禁用，直接返回原结果
-        if not self.enabled:
-            logger.debug("Rerank 已禁用，跳过重排序")
+        # 智能启用判断：结果数量超过 top_k 时才需要 rerank
+        if len(passages) <= top_k:
+            logger.debug(f"Rerank 跳过：仅 {len(passages)} 个结果，未超过 top_k={top_k}")
             return passages[:top_k]
 
         if self.use_api:
