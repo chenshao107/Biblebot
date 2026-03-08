@@ -1,5 +1,7 @@
 import requests
+from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Any
+import numpy as np
 from loguru import logger
 from app.core.config import settings
 import re
@@ -10,8 +12,12 @@ from collections import Counter
 
 class HybridEmbedder:
     def __init__(self):
-        # 强制使用 API 模式，不加载本地模型
-        logger.info(f"Using Cloud API for embeddings: {settings.EMBEDDING_API_URL}")
+        self.use_api = settings.USE_EMBEDDING_API
+        if not self.use_api:
+            logger.info(f"Loading local dense embedding model: {settings.EMBEDDING_MODEL_NAME}")
+            self.dense_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
+        else:
+            logger.info(f"Using Cloud API for embeddings: {settings.EMBEDDING_API_URL}")
         
         # Vocabulary for sparse encoding (simplified)
         self.sparse_vocab_size = 10000
@@ -21,22 +27,31 @@ class HybridEmbedder:
         self._min_call_interval = 0.1  # 每次API调用间隔至少100ms
 
     def embed_dense(self, text: str) -> List[float]:
-        """Generates a dense vector via API."""
-        # API速率限制
-        elapsed = time.time() - self._last_api_call_time
-        if elapsed < self._min_call_interval:
-            time.sleep(self._min_call_interval - elapsed)
+        """Generates a dense vector."""
+        if self.use_api:
+            # API速率限制
+            elapsed = time.time() - self._last_api_call_time
+            if elapsed < self._min_call_interval:
+                time.sleep(self._min_call_interval - elapsed)
+            
+            result = self._embed_dense_api(text)
+            self._last_api_call_time = time.time()
+            return result
         
-        result = self._embed_dense_api(text)
-        self._last_api_call_time = time.time()
-        return result
+        embedding = self.dense_model.encode(text)
+        return embedding.tolist()
     
     def embed_dense_batch(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
         """
-        批量生成dense向量，通过API提升效率
+        批量生成dense向量，提升效率
         batch_size: 每批处理的文本数量
         """
-        return self._embed_dense_api_batch(texts, batch_size)
+        if self.use_api:
+            return self._embed_dense_api_batch(texts, batch_size)
+        
+        # 本地模型批量处理
+        embeddings = self.dense_model.encode(texts)
+        return [emb.tolist() for emb in embeddings]
 
     def _embed_dense_api(self, text: str) -> List[float]:
         """Calls Cloud API for dense embedding with retry mechanism."""
@@ -171,7 +186,9 @@ class HybridEmbedder:
         return [t for t in tokens if len(t) > 1]
 
     def get_dim(self) -> int:
-        return settings.EMBEDDING_DIM
+        if self.use_api:
+            return settings.EMBEDDING_DIM
+        return self.dense_model.get_sentence_embedding_dimension()
 
     def save_embedding_metadata(self, doc_id: str, chunks_embeddings: List[Dict[str, Any]]):
         """
@@ -190,7 +207,7 @@ class HybridEmbedder:
             json.dump({
                 "doc_id": doc_id,
                 "embedding_model": settings.EMBEDDING_MODEL_NAME,
-                "use_api": True,
+                "use_api": self.use_api,
                 "dense_dim": self.get_dim(),
                 "sparse_vocab_size": self.sparse_vocab_size,
                 "total_chunks": len(chunks_embeddings),
