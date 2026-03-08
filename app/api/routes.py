@@ -93,6 +93,7 @@ async def query_rag(request: QueryRequest):
     """
     RAG 检索接口 - 纯向量检索，不调用 Agent
     保留此接口用于快速检索场景
+    注意：只要检索结果超过 top_k 就会自动 rerank
     """
     try:
         rag_engine = get_rag_engine()
