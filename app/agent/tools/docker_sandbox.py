@@ -44,7 +44,7 @@ class DockerSandbox:
     """
     
     # 默认镜像名
-    DEFAULT_IMAGE = "rag-sandbox:latest"
+    DEFAULT_IMAGE = "bibobot-sandbox:latest"
     
     # 容器内路径
     CONTAINER_RAW_PATH = "/workspace/data/raw"
@@ -66,7 +66,7 @@ class DockerSandbox:
         
         Args:
             session_id: 会话 ID，用于隔离不同 Agent 实例
-            image: Docker 镜像名，默认 rag-sandbox:latest
+            image: Docker 镜像名，默认 bibobot-sandbox:latest
             raw_dir: 知识库目录（宿主机路径），默认 data/raw
             work_dir: 工作目录（宿主机路径），默认 data/work/<session_id>
             memory_limit: 内存限制，默认 512m
@@ -195,7 +195,7 @@ class DockerSandbox:
                 self.image,
                 detach=True,
                 tty=True,
-                name=f"rag-sandbox-{self.session_id}",
+                name=f"bibobot-sandbox-{self.session_id}",
                 volumes=volumes,
                 working_dir="/workspace",
                 mem_limit=self.memory_limit,

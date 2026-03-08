@@ -1,4 +1,4 @@
-# Professional RAG Server 开发与调试手册
+# Professional BiboBot 开发与调试手册
 
 本项目是一个工业级的 RAG（检索增强生成）系统框架，核心特点是支持 **多格式文档摄取**、**混合搜索 (Dense + Sparse)**、**两阶段检索 (Recall + Rerank)** 以及 **智能 Agent 知识服务**。
 
@@ -15,7 +15,7 @@
 ## 1. 项目目录结构
 
 ```text
-my-rag-server/
+bibobot/
 ├── app/
 │   ├── api/                # API 层：FastAPI 路由定义
 │   │   └── routes.py       # 定义 /api/agent, /api/query 等接口

@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     
     # Docker 沙箱配置
     USE_DOCKER_SANDBOX: bool = True  # 是否使用 Docker 沙箱（推荐）
-    DOCKER_SANDBOX_IMAGE: str = "rag-sandbox:latest"  # 沙箱镜像名
+    DOCKER_SANDBOX_IMAGE: str = "bibobot-sandbox:latest"  # 沙箱镜像名
     DOCKER_MEMORY_LIMIT: str = "512m"  # Docker 内存限制
     DOCKER_CPU_QUOTA: int = 100000  # Docker CPU 限制（100000 = 1核）
     DOCKER_TIMEOUT: int = 60  # Docker 命令执行超时（秒）
