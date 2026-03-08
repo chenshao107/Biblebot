@@ -261,7 +261,7 @@ class MarkdownChunker:
                 sections.append({"title": current_title, "content": content})
             
             current_title = match.group(0).strip()
-            last_pos = match.start()
+            last_pos = match.end()  # 从标题之后开始，避免 content 包含标题
             
         # Add the last section
         sections.append({"title": current_title, "content": md[last_pos:].strip()})
