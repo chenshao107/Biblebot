@@ -129,13 +129,49 @@ print(data['key'])
         
         return globals_dict
     
+    def _prepare_globals_unrestricted(self) -> Dict[str, Any]:
+        """准备无限制的执行环境（调试模式）"""
+        import json
+        import re
+        import os
+        import collections
+        import itertools
+        import math
+        import datetime
+        import csv
+        import sys
+        import subprocess
+        from pathlib import Path
+        
+        return {
+            "__builtins__": __builtins__,
+            "json": json,
+            "re": re,
+            "os": os,
+            "sys": sys,
+            "subprocess": subprocess,
+            "collections": collections,
+            "itertools": itertools,
+            "math": math,
+            "datetime": datetime,
+            "csv": csv,
+            "Path": Path,
+            "DATA_DIR": settings.DATA_RAW_DIR,
+        }
+    
     def execute(self, code: str) -> ToolResult:
         """执行 Python 代码"""
         try:
             logger.info(f"执行 Python 代码:\n{code[:200]}...")
             
-            # 准备执行环境
-            globals_dict = self._prepare_globals()
+            from app.core.config import settings
+            
+            # 根据配置选择执行环境
+            if settings.ENABLE_PYTHON_RESTRICTIONS:
+                globals_dict = self._prepare_globals()
+            else:
+                globals_dict = self._prepare_globals_unrestricted()
+            
             locals_dict = {}
             
             # 捕获输出

@@ -85,6 +85,12 @@ class BashTool(BaseTool):
         Returns:
             (is_safe, reason)
         """
+        from app.core.config import settings
+        
+        # 如果禁用了白名单检查，直接放行
+        if not settings.ENABLE_BASH_WHITELIST:
+            return True, ""
+        
         # 检查危险模式
         command_lower = command.lower()
         for pattern in self.DANGEROUS_PATTERNS:

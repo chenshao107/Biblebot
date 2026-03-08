@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     PYTHON_TOOL_TIMEOUT: int = 30  # Python 执行超时时间（秒）
     BASH_WORK_DIR: Optional[str] = None  # Bash 工具工作目录，默认为 DATA_RAW_DIR
     
+    # 工具安全控制（调试期可禁用）
+    ENABLE_BASH_WHITELIST: bool = False  # 是否启用 Bash 命令白名单检查，默认禁用方便调试
+    ENABLE_PYTHON_RESTRICTIONS: bool = False  # 是否启用 Python 执行限制，默认禁用方便调试
+    
     # Docker 沙箱配置
     USE_DOCKER_SANDBOX: bool = True  # 是否使用 Docker 沙箱（推荐）
     DOCKER_SANDBOX_IMAGE: str = "bibobot-sandbox:latest"  # 沙箱镜像名
