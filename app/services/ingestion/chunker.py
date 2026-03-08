@@ -7,7 +7,7 @@ import json
 from app.core.config import settings
 
 class MarkdownChunker:
-    def __init__(self, chunk_size: int = 1500, chunk_overlap: int = 100):
+    def __init__(self, chunk_size: int = 800, chunk_overlap: int = 150):
         self.md = MarkdownIt()
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -30,8 +30,8 @@ class MarkdownChunker:
         # Normalize markdown first
         content = self._normalize_md(md_content)
         
-        # Split by headers (simplistic version for now)
-        sections = self._split_by_headers(content)
+        # Split by headers AND code blocks (代码块单独成 chunk)
+        sections = self._split_by_headers_and_codeblocks(content)
         
         chunks = []
         for section in sections:
@@ -52,8 +52,8 @@ class MarkdownChunker:
             if len(section_content) > self.chunk_size:
                 sub_chunks = self._sliding_window(section_content, self.chunk_size, self.chunk_overlap)
                 for i, sub in enumerate(sub_chunks):
-                    # 只在第一个子分片添加标题，避免重复
-                    content = f"{section_title}\n{sub}" if i == 0 else sub
+                    # 每个子分片都添加标题，增强 embedding 语义
+                    content = f"{section_title}\n{sub}"
                     chunks.append({
                         "content": content,
                         "metadata": {
@@ -64,8 +64,10 @@ class MarkdownChunker:
                         }
                     })
             else:
+                # 小分片也添加标题
+                content = f"{section_title}\n{section_content}"
                 chunks.append({
-                    "content": section_content,
+                    "content": content,
                     "metadata": {
                         **metadata,
                         "chunk_index": len(chunks),
@@ -126,6 +128,9 @@ class MarkdownChunker:
         
         # 合并Docling产生的碎片化段落
         md = self._merge_fragmented_paragraphs(md)
+        
+        # 合并孤立的代码块到相邻段落（解决代码块和说明被分开的问题）
+        md = self._merge_isolated_code_blocks(md)
         
         # 过滤掉纯目录部分（密集的链接列表）
         md = self._filter_toc_section(md)
@@ -203,6 +208,101 @@ class MarkdownChunker:
         
         return '\n\n'.join(result_lines)
     
+    def _merge_isolated_code_blocks(self, md: str) -> str:
+        """
+        合并代码块与其上下文（前一行和后一行）。
+        
+        Docling 转换后，代码块和说明文字被空行分开。
+        解决策略：把代码块和紧邻的前后各一行（如果是短文本）合并成一个整体。
+        
+        使用两阶段处理避免重复问题：
+        1. 先标记所有需要合并的代码块及其上下文位置
+        2. 再构建结果，跳过已被合并到代码块的行
+        """
+        lines = md.split('\n')
+        n = len(lines)
+        
+        # 标记哪些行已经被合并（不需要再输出）
+        skip_lines = set()
+        
+        # 第一阶段：找出所有代码块及其上下文
+        code_blocks_info = []
+        i = 0
+        while i < n:
+            if lines[i].strip().startswith('```'):
+                start = i
+                i += 1
+                while i < n and not lines[i].strip().startswith('```'):
+                    i += 1
+                if i < n:
+                    end = i  # 包含结束标记
+                    code_blocks_info.append((start, end))
+                i += 1
+            else:
+                i += 1
+        
+        # 第二阶段：为每个代码块找上下文，并标记要跳过的行
+        for idx, (start, end) in enumerate(code_blocks_info):
+            # 找前一行（跳过空行）
+            before = start - 1
+            while before >= 0 and not lines[before].strip():
+                before -= 1
+            
+            # 找后一行（跳过空行）  
+            after = end + 1
+            while after < n and not lines[after].strip():
+                after += 1
+            
+            # 检查上下文是否合适（短文本，不是标题）
+            # 避免上下文重叠：如果前一行已经是前一个代码块的后文，则跳过
+            if before >= 0 and len(lines[before]) < 100 and not lines[before].strip().startswith('#'):
+                # 检查是否已被用作其他代码块的后文
+                if before not in skip_lines:
+                    skip_lines.add(before)
+            
+            if after < n and len(lines[after]) < 100 and not lines[after].strip().startswith('#'):
+                # 检查是否已被用作其他代码块的前文，或者是否和前文是同一行
+                if after not in skip_lines and after != before:
+                    skip_lines.add(after)
+        
+        # 第三阶段：构建结果
+        result_lines = []
+        i = 0
+        while i < n:
+            if lines[i].strip().startswith('```'):
+                # 输出代码块及其上下文
+                start = i
+                while i < n and not (i > start and lines[i].strip().startswith('```')):
+                    i += 1
+                end = i
+                
+                # 输出前文（如果存在且合适）
+                before = start - 1
+                while before >= 0 and not lines[before].strip():
+                    before -= 1
+                if before >= 0 and before in skip_lines:
+                    result_lines.append(lines[before])
+                
+                # 输出代码块
+                for j in range(start, min(end + 1, n)):
+                    result_lines.append(lines[j])
+                
+                # 输出后文（如果存在且合适）
+                after = end + 1
+                while after < n and not lines[after].strip():
+                    after += 1
+                if after < n and after in skip_lines:
+                    result_lines.append(lines[after])
+                    i = after + 1  # 跳过已处理的后文
+                else:
+                    i = end + 1
+            else:
+                if i not in skip_lines:
+                    result_lines.append(lines[i])
+                i += 1
+        
+        return '\n'.join(result_lines)
+    
     def _filter_toc_section(self, md: str) -> str:
         """
         检测并过滤掉纯目录部分（Table of Contents）
@@ -268,6 +368,62 @@ class MarkdownChunker:
         
         return sections
 
+    def _split_by_headers_and_codeblocks(self, md: str) -> List[Dict[str, str]]:
+        """
+        按标题和代码块切分文档。
+        
+        策略：
+        1. 先按标题切分
+        2. 在每个标题区域内，把代码块单独提取成独立 section
+        """
+        # 先按标题切分
+        header_sections = self._split_by_headers(md)
+        
+        final_sections = []
+        for section in header_sections:
+            title = section['title']
+            content = section['content']
+            
+            # 在内容中查找代码块
+            code_pattern = re.compile(r'```[\s\S]*?```', re.MULTILINE)
+            matches = list(code_pattern.finditer(content))
+            
+            if not matches:
+                # 没有代码块，直接保留
+                final_sections.append(section)
+                continue
+            
+            # 有代码块，需要拆分
+            last_end = 0
+            for match in matches:
+                # 代码块前的文本
+                before_text = content[last_end:match.start()].strip()
+                if before_text:
+                    final_sections.append({
+                        "title": title,
+                        "content": before_text
+                    })
+                
+                # 代码块单独成 section
+                code_block = match.group(0).strip()
+                if code_block:
+                    final_sections.append({
+                        "title": title,  # 代码块也保留标题
+                        "content": code_block
+                    })
+                
+                last_end = match.end()
+            
+            # 最后一个代码块后的文本
+            after_text = content[last_end:].strip()
+            if after_text:
+                final_sections.append({
+                    "title": title,
+                    "content": after_text
+                })
+        
+        return final_sections
+    
     def _sliding_window(self, text: str, size: int, overlap: int) -> List[str]:
         if not text:
             return []
