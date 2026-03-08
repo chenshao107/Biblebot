@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     USE_EMBEDDING_API: bool = False
     EMBEDDING_API_KEY: Optional[str] = None
     EMBEDDING_API_URL: str = "https://api.siliconflow.cn/v1/embeddings"
+    EMBEDDING_API_TIMEOUT: int = 60  # API调用超时时间（秒）
+    EMBEDDING_API_MAX_RETRIES: int = 3  # 最大重试次数
+    EMBEDDING_API_RETRY_DELAY: int = 2  # 重试间隔（秒）
 
     # 重排 (Rerank) 配置
     RERANK_MODEL_NAME: str = "ms-marco-MiniLM-L-6-v2"

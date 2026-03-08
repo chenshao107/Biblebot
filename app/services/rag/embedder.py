@@ -55,8 +55,9 @@ class HybridEmbedder:
 
     def _embed_dense_api(self, text: str) -> List[float]:
         """Calls Cloud API for dense embedding with retry mechanism."""
-        max_retries = 3
-        retry_delay = 2  # 秒
+        max_retries = settings.EMBEDDING_API_MAX_RETRIES if hasattr(settings, 'EMBEDDING_API_MAX_RETRIES') else 3
+        retry_delay = settings.EMBEDDING_API_RETRY_DELAY if hasattr(settings, 'EMBEDDING_API_RETRY_DELAY') else 2  # 秒
+        api_timeout = settings.EMBEDDING_API_TIMEOUT if hasattr(settings, 'EMBEDDING_API_TIMEOUT') else 30  # 秒
         
         for attempt in range(max_retries):
             try:
@@ -73,11 +74,42 @@ class HybridEmbedder:
                     settings.EMBEDDING_API_URL, 
                     json=payload, 
                     headers=headers,
-                    timeout=30  # 添加超时设置
+                    timeout=api_timeout
                 )
                 response.raise_for_status()
                 return response.json()["data"][0]["embedding"]
                 
+            except requests.exceptions.HTTPError as e:
+                # 获取详细错误信息
+                status_code = e.response.status_code
+                try:
+                    error_detail = e.response.json()
+                except:
+                    error_detail = e.response.text[:500]
+                
+                # 401/403 是认证/权限错误，重试无用
+                if status_code in (401, 403):
+                    logger.error(f"Embedding API 认证失败 ({status_code}): {error_detail}")
+                    logger.error(f"请检查 EMBEDDING_API_KEY 是否正确，以及是否有权限访问模型 {settings.EMBEDDING_MODEL_NAME}")
+                    raise e
+                
+                # 429 是限流，需要重试
+                if status_code == 429:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Embedding API 限流 (429)，等待 {retry_delay} 秒后重试...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                        continue
+                
+                # 其他 HTTP 错误
+                if attempt < max_retries - 1:
+                    logger.warning(f"Embedding API调用失败 (尝试 {attempt + 1}/{max_retries}): {status_code} - {error_detail}")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    logger.error(f"Embedding API调用失败，已达最大重试次数: {status_code} - {error_detail}")
+                    raise e
+                    
             except requests.exceptions.RequestException as e:
                 if attempt < max_retries - 1:
                     logger.warning(f"Embedding API调用失败 (尝试 {attempt + 1}/{max_retries}): {e}")
