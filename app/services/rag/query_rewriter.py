@@ -18,8 +18,15 @@ class QueryRewriter:
             logger.warning("LLM_API_KEY not configured. Skipping query rewriting.")
             return [query]
 
-        prompt = f"""你是一个搜索专家。请将以下用户查询改写为3个不同的搜索关键词或短语，以提高召回率。
-请直接输出改写后的内容，每行一个，不要包含任何解释。
+        prompt = f"""你是一个搜索专家。请将用户查询改写为4个不同的搜索变体，以提高在英文技术文档中的召回率。
+
+改写策略：
+1. 保留原查询的中文表达
+2. 生成英文关键词（技术文档通常是英文）
+3. 提取核心命令/术语（如 menuconfig, make, config）
+4. 生成同义词/相关术语
+
+请直接输出改写后的内容，每行一个，不要包含序号、解释或多余内容。
 
 用户查询: {query}
 """
