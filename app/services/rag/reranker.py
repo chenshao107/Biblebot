@@ -7,12 +7,18 @@ from app.core.config import settings
 class HybridReranker:
     def __init__(self):
         self.use_api = settings.USE_RERANK_API
-        if not self.use_api:
+        self.enabled = settings.USE_RERANK_API  # 当 False 时完全跳过 rerank
+        
+        if not self.enabled:
+            logger.info("Rerank 已禁用，将直接返回向量检索结果")
+            return
+        
+        if self.use_api:
+            logger.info(f"Using Cloud API for Rerank: {settings.RERANK_API_URL}")
+        else:
             logger.info(f"Loading local Reranker model: {settings.RERANK_MODEL_NAME}")
             # FlashRank will download the model automatically
             self.ranker = Ranker(model_name=settings.RERANK_MODEL_NAME, cache_dir="./models")
-        else:
-            logger.info(f"Using Cloud API for Rerank: {settings.RERANK_API_URL}")
 
     def rerank(self, query: str, passages: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str, Any]]:
         """
@@ -20,6 +26,11 @@ class HybridReranker:
         """
         if not passages:
             return []
+        
+        # 如果 rerank 被禁用，直接返回原结果
+        if not self.enabled:
+            logger.debug("Rerank 已禁用，跳过重排序")
+            return passages[:top_k]
 
         if self.use_api:
             return self._rerank_api(query, passages, top_k)
