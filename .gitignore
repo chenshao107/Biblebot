@@ -1,5 +1,48 @@
-venv
-__pycache__
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# 数据目录（可根据需要调整）
-data
+# 环境配置（包含敏感信息）
+.env
+RAG_env.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 数据目录（生成的中间文件和向量数据）
+data/canonical_md/
+data/chunks/
+data/embeddings/
+
+# Docker 数据卷
+docker/qdrant_storage/
+
+# 日志
+*.log

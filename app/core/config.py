@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     AGENT_MAX_ITERATIONS: int = 10  # Agent 最大迭代次数
     BASH_TOOL_TIMEOUT: int = 30  # Bash 命令超时时间（秒）
     PYTHON_TOOL_TIMEOUT: int = 30  # Python 执行超时时间（秒）
-    BASH_WORK_DIR: str = None  # Bash 工具工作目录，默认为 DATA_RAW_DIR
+    BASH_WORK_DIR: Optional[str] = None  # Bash 工具工作目录，默认为 DATA_RAW_DIR
     
     # Docker 沙箱配置
     USE_DOCKER_SANDBOX: bool = True  # 是否使用 Docker 沙箱（推荐）
