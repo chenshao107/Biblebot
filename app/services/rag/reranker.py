@@ -1,45 +1,21 @@
 import requests
-from flashrank import Ranker, RerankRequest
 from typing import List, Dict, Any
 from loguru import logger
 from app.core.config import settings
 
 class HybridReranker:
     def __init__(self):
-        self.use_api = settings.USE_RERANK_API
-        if not self.use_api:
-            logger.info(f"Loading local Reranker model: {settings.RERANK_MODEL_NAME}")
-            # FlashRank will download the model automatically
-            self.ranker = Ranker(model_name=settings.RERANK_MODEL_NAME, cache_dir="./models")
-        else:
-            logger.info(f"Using Cloud API for Rerank: {settings.RERANK_API_URL}")
+        # 强制使用 API 模式，不加载本地模型
+        logger.info(f"Using Cloud API for Rerank: {settings.RERANK_API_URL}")
 
     def rerank(self, query: str, passages: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str, Any]]:
         """
-        Reranks the retrieved passages based on the query.
+        Reranks the retrieved passages based on the query via API.
         """
         if not passages:
             return []
 
-        if self.use_api:
-            return self._rerank_api(query, passages, top_k)
-
-        # Prepare passages for FlashRank
-        flash_passages = [
-            {
-                "id": p.get("id", i),
-                "text": p["payload"].get("content", ""),
-                "meta": p["payload"]
-            }
-            for i, p in enumerate(passages)
-        ]
-
-        rerank_request = RerankRequest(query=query, passages=flash_passages)
-        results = self.ranker.rerank(rerank_request)
-
-        # FlashRank returns a list of results with scores
-        logger.info(f"Reranked {len(passages)} passages down to {top_k} (Local)")
-        return results[:top_k]
+        return self._rerank_api(query, passages, top_k)
 
     def _rerank_api(self, query: str, passages: List[Dict[str, Any]], top_k: int) -> List[Dict[str, Any]]:
         """Calls Cloud API for reranking."""
