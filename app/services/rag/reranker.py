@@ -51,9 +51,20 @@ class HybridReranker:
         rerank_request = RerankRequest(query=query, passages=flash_passages)
         results = self.ranker.rerank(rerank_request)
 
-        # FlashRank returns a list of results with scores
-        logger.info(f"Reranked {len(passages)} passages down to {top_k} (Local)")
-        return results[:top_k]
+        # FlashRank returns a list of results with scores, map back to Qdrant format
+        final_results = []
+        for res in results[:top_k]:
+            # Find original passage by id
+            original_p = next((p for p in passages if p.get("id") == res.get("id")), None)
+            if original_p:
+                final_results.append({
+                    "id": original_p.get("id"),
+                    "payload": original_p["payload"],
+                    "score": res.get("score", 0)
+                })
+        
+        logger.info(f"Reranked {len(passages)} passages down to {len(final_results)} (Local)")
+        return final_results
 
     def _rerank_api(self, query: str, passages: List[Dict[str, Any]], top_k: int) -> List[Dict[str, Any]]:
         """Calls Cloud API for reranking."""
@@ -74,16 +85,15 @@ class HybridReranker:
             
             api_results = response.json()["results"]
             
-            # Map back to our format
+            # Map back to Qdrant format (保持和原始检索一致的格式)
             final_results = []
             for res in api_results:
                 idx = res["index"]
                 original_p = passages[idx]
                 final_results.append({
                     "id": original_p.get("id"),
-                    "text": original_p["payload"].get("content", ""),
-                    "score": res["relevance_score"],
-                    "meta": original_p["payload"]
+                    "payload": original_p["payload"],
+                    "score": res["relevance_score"]
                 })
             
             logger.info(f"Reranked {len(passages)} passages down to {top_k} (API)")
