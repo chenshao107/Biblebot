@@ -42,17 +42,27 @@ class QdrantStorage:
             logger.error(f"Failed to initialize Qdrant collection: {e}")
             raise e
 
-    def upsert_chunks(self, points: list):
+    def upsert_chunks(self, points: list, batch_size: int = 100):
         """
-        Upserts points (chunks) into Qdrant.
+        Upserts points (chunks) into Qdrant with batching to avoid payload size limits.
         Each point should have dense and sparse vectors in the 'vectors' dict.
+        
+        Args:
+            points: List of PointStruct to upsert
+            batch_size: Number of points per batch (default: 100)
         """
         try:
-            self.client.upsert(
-                collection_name=self.collection_name,
-                points=points
-            )
-            logger.info(f"Upserted {len(points)} points to {self.collection_name}")
+            total_points = len(points)
+            for i in range(0, total_points, batch_size):
+                batch = points[i:i + batch_size]
+                self.client.upsert(
+                    collection_name=self.collection_name,
+                    points=batch
+                )
+                logger.info(f"Upserted batch {i//batch_size + 1}/{(total_points + batch_size - 1)//batch_size}, "
+                           f"{len(batch)} points to {self.collection_name}")
+            
+            logger.info(f"Successfully upserted {total_points} points total to {self.collection_name}")
         except Exception as e:
             logger.error(f"Error during upsert: {e}")
             raise e
