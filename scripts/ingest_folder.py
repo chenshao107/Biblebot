@@ -63,12 +63,20 @@ def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, s
         chunks = chunker.chunk(md_content, rel_path, path_info)
         chunker.save_chunks(chunks, rel_path)
         
-        # 3. Embed & Prepare Points
+        # 3. Embed & Prepare Points (使用批量embedding加速)
         points = []
         embedding_metadata = []
-        for i, chunk in enumerate(chunks):
+        
+        # 提取所有chunk的文本内容
+        chunk_contents = [chunk["content"] for chunk in chunks]
+        
+        # 批量获取dense embedding
+        logger.info(f"Generating embeddings for {len(chunks)} chunks using batch API...")
+        dense_vectors = embedder.embed_dense_batch(chunk_contents, batch_size=32)
+        
+        # 处理每个chunk
+        for i, (chunk, dense_vec) in enumerate(zip(chunks, dense_vectors)):
             content = chunk["content"]
-            dense_vec = embedder.embed_dense(content)
             sparse_vec = embedder.embed_sparse(content)
             
             embedding_metadata.append({
