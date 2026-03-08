@@ -7,7 +7,7 @@ import json
 from app.core.config import settings
 
 class MarkdownChunker:
-    def __init__(self, chunk_size: int = 800, chunk_overlap: int = 150):
+    def __init__(self, chunk_size: int = 1500, chunk_overlap: int = 100):
         self.md = MarkdownIt()
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -52,12 +52,15 @@ class MarkdownChunker:
             if len(section_content) > self.chunk_size:
                 sub_chunks = self._sliding_window(section_content, self.chunk_size, self.chunk_overlap)
                 for i, sub in enumerate(sub_chunks):
+                    # 只在第一个子分片添加标题，避免重复
+                    content = f"{section_title}\n{sub}" if i == 0 else sub
                     chunks.append({
-                        "content": f"{section_title}\n{sub}",
+                        "content": content,
                         "metadata": {
                             **metadata,
                             "chunk_index": len(chunks),
-                            "is_subchunk": True
+                            "is_subchunk": True,
+                            "subchunk_index": i
                         }
                     })
             else:
@@ -121,10 +124,84 @@ class MarkdownChunker:
         # Remove excessive empty lines
         md = re.sub(r"\n{3,}", "\n\n", md)
         
+        # 合并Docling产生的碎片化段落
+        md = self._merge_fragmented_paragraphs(md)
+        
         # 过滤掉纯目录部分（密集的链接列表）
         md = self._filter_toc_section(md)
         
         return md
+    
+    def _merge_fragmented_paragraphs(self, md: str) -> str:
+        """
+        合并Docling转换产生的碎片化段落。
+        Docling会把一段连续的文本按行分割，中间插入空行，导致：
+        "The first step...\n\nis to create...\n\na configuration."
+        需要合并成：
+        "The first step is to create a configuration."
+        """
+        lines = md.split('\n')
+        result_lines = []
+        i = 0
+        
+        while i < len(lines):
+            line = lines[i]
+            
+            # 如果是空行，跳过
+            if not line.strip():
+                i += 1
+                continue
+            
+            # 如果是代码块标记、标题、列表项，直接保留
+            if line.strip().startswith('```') or line.strip().startswith('#') or \
+               line.strip().startswith('- ') or line.strip().startswith('* ') or \
+               re.match(r'^\d+\.', line.strip()):
+                result_lines.append(line)
+                i += 1
+                continue
+            
+            # 否则，尝试合并连续的短行（句子片段）
+            merged = line
+            i += 1
+            
+            # 向后看：如果下一行是空行，再下一行是短文本行（不是特殊格式），则合并
+            while i < len(lines):
+                # 跳过空行
+                if i < len(lines) and not lines[i].strip():
+                    i += 1
+                    continue
+                
+                # 检查下一行内容
+                if i < len(lines):
+                    next_line = lines[i]
+                    # 如果下一行是特殊格式，停止合并
+                    if next_line.strip().startswith('```') or \
+                       next_line.strip().startswith('#') or \
+                       next_line.strip().startswith('- ') or \
+                       next_line.strip().startswith('* ') or \
+                       re.match(r'^\d+\.', next_line.strip()) or \
+                       next_line.strip().startswith('[') or \
+                       next_line.strip().startswith('!['):
+                        break
+                    
+                    # 合并条件：
+                    # 1. 当前行没有结束标点（说明句子未完）
+                    # 2. 下一行不是以大写字母开头（排除新句子）
+                    # 3. 合并后总长度不超过300字符
+                    if not merged.endswith('.') and not merged.endswith('?') and not merged.endswith('!') and \
+                       not merged.endswith(')') and \
+                       not next_line[0].isupper() and \
+                       len(merged) + len(next_line) < 300:
+                        merged = merged + ' ' + next_line
+                        i += 1
+                    else:
+                        break
+                else:
+                    break
+            
+            result_lines.append(merged)
+        
+        return '\n\n'.join(result_lines)
     
     def _filter_toc_section(self, md: str) -> str:
         """
@@ -166,8 +243,8 @@ class MarkdownChunker:
         return '\n'.join(filtered_lines)
 
     def _split_by_headers(self, md: str) -> List[Dict[str, str]]:
-        # Regex to match headers
-        header_pattern = re.compile(r"^(#{1,4})\s+(.+)$", re.MULTILINE)
+        # Regex to match headers (h1-h3, skip h4 to avoid over-splitting)
+        header_pattern = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
         
         matches = list(header_pattern.finditer(md))
         if not matches:
@@ -206,12 +283,19 @@ class MarkdownChunker:
         return self._smart_split_with_code_blocks(text, size, overlap)
     
     def _simple_sliding_window(self, text: str, size: int, overlap: int) -> List[str]:
-        """简单的滑动窗口切分"""
+        """简单的滑动窗口切分，添加最小长度过滤"""
         chunks = []
         start = 0
+        min_chunk_size = 50  # 最小分片长度，过滤太短的碎片
+        
         while start < len(text):
             end = start + size
-            chunks.append(text[start:end])
+            chunk = text[start:end]
+            # 最后一片如果太短，合并到前一片
+            if end >= len(text) and len(chunk) < min_chunk_size and chunks:
+                chunks[-1] = chunks[-1] + chunk
+            else:
+                chunks.append(chunk)
             start += size - overlap
             if end >= len(text):
                 break
