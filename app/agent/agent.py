@@ -63,10 +63,30 @@ class Agent:
         self.max_iterations = max_iterations or settings.AGENT_MAX_ITERATIONS
         self.knowledge_tree = knowledge_tree
     
+    def _check_tree_command(self):
+        """检查 tree 命令是否存在"""
+        try:
+            result = subprocess.run(
+                ["tree", "--version"],
+                capture_output=True,
+                timeout=2
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+    
     def _get_knowledge_tree(self) -> str:
         """获取知识库目录结构（2层）"""
         if self.knowledge_tree:
             return self.knowledge_tree
+        
+        # 检查 tree 命令是否存在
+        if not self._check_tree_command():
+            logger.error("❌ 'tree' 命令未安装，请执行: sudo apt-get install tree")
+            raise RuntimeError(
+                "tree 命令缺失。Agent 需要 tree 命令来获取知识库结构。\n"
+                "请安装: sudo apt-get install tree 或 sudo yum install tree"
+            )
         
         # 自动获取知识库结构
         try:
@@ -83,8 +103,8 @@ class Agent:
             )
             if result.returncode == 0:
                 return result.stdout
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"获取知识库结构失败: {e}")
         
         return ""
         
