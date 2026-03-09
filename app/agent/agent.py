@@ -2,14 +2,21 @@
 Agent 核心 - LLM + 循环 + 工具调用
 """
 import json
+import os
+import subprocess
 from typing import List, Dict, Any, Optional, Generator
 from loguru import logger
 from app.agent.llm import LLMClient
 from app.agent.tools.base import BaseTool, ToolResult
+from app.core.config import settings
 
 
-SYSTEM_PROMPT = """你是一个智能知识助手，类似于Claude Code、Cursor的AI助手，可以通过各种工具来回答用户的问题。
-
+def get_system_prompt(knowledge_tree: str = "") -> str:
+    """生成系统 Prompt，包含知识库结构信息"""
+    tree_info = f"\n知识库结构：\n{knowledge_tree}\n" if knowledge_tree else ""
+    
+    return f"""你是一个智能知识助手，类似于Claude Code、Cursor的AI助手，可以通过各种工具来回答用户的问题。
+{tree_info}
 你有以下工具可用：
 1. **search_knowledge**: 在知识库中进行语义搜索（RAG检索）
 2. **run_bash**: 执行 bash 命令来探索文件（如 ls, cat, head, tail, grep, rg, find 等）
@@ -22,17 +29,53 @@ SYSTEM_PROMPT = """你是一个智能知识助手，类似于Claude Code、Curso
 - 你可以组合使用多个工具来完成复杂任务
 - 每次工具调用后，仔细分析结果，决定是否需要继续探索。当你能确定答案时，请立即给出最终答案。
 
+工具使用建议（强烈建议但不强制）：
+- search_knowledge: 建议最多 2-3 次，除非你认为当前知识库还有未挖掘的信息，或者查询不够、有必要延伸查找某些东西能完善回答
+- run_bash: 建议最多 2-3 次，用于查看已定位的原文片段
+- run_python: 仅在需要数据分析时使用
+
+重要提醒：
+- 如果已经获得足够信息能回答用户问题，请立即停止调用工具，直接给出最终答案
+- 不要为了探索而探索，避免不必要的工具调用
+- 简单问题通常 1-2 次 search_knowledge 就能解决
+
 请根据用户的问题，自主选择合适的工具，逐步探索并最终给出完整的答案。"""
 
 
 class Agent:
     """Agent 核心类"""
     
-    def __init__(self, tools: List[BaseTool], max_iterations: int = None):
+    def __init__(self, tools: List[BaseTool], max_iterations: int = None, knowledge_tree: str = ""):
         from app.core.config import settings
         self.llm = LLMClient()
         self.tools = {tool.name: tool for tool in tools}
         self.max_iterations = max_iterations or settings.AGENT_MAX_ITERATIONS
+        self.knowledge_tree = knowledge_tree
+    
+    def _get_knowledge_tree(self) -> str:
+        """获取知识库目录结构（2层）"""
+        if self.knowledge_tree:
+            return self.knowledge_tree
+        
+        # 自动获取知识库结构
+        try:
+            data_dir = settings.DATA_RAW_DIR
+            if not os.path.exists(data_dir):
+                return ""
+            
+            # 使用 tree -L 2 获取两层目录结构
+            result = subprocess.run(
+                ["tree", "-L", "2", data_dir],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                return result.stdout
+        except Exception:
+            pass
+        
+        return ""
         
     def _get_tools_schema(self) -> List[Dict[str, Any]]:
         """获取所有工具的 OpenAI function calling schema"""
@@ -100,8 +143,10 @@ class Agent:
             }
         """
         # 构建初始消息
+        knowledge_tree = self._get_knowledge_tree()
+        system_prompt = get_system_prompt(knowledge_tree)
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT}
+            {"role": "system", "content": system_prompt}
         ]
         
         # 添加上下文（如果有）
