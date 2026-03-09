@@ -45,15 +45,6 @@ def build_sandbox_image():
         "."
     ]
     
-    # 如果环境有代理，添加构建参数
-    http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
-    https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
-    
-    if http_proxy:
-        cmd.extend(["--build-arg", f"HTTP_PROXY={http_proxy}"])
-    if https_proxy:
-        cmd.extend(["--build-arg", f"HTTPS_PROXY={https_proxy}"])
-    
     return run(cmd, check=False)
 
 def check_docker():
