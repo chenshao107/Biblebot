@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     ENABLE_BASH_WHITELIST: bool = False  # 是否启用 Bash 命令白名单检查，默认禁用方便调试
     ENABLE_PYTHON_RESTRICTIONS: bool = False  # 是否启用 Python 执行限制，默认禁用方便调试
     
+    # LLM 调试配置
+    DEBUG_LLM_API: bool = False  # 是否保存 LLM API 调用的输入输出到文件
+    DEBUG_LLM_LOG_DIR: str = "logs/llm"  # LLM 调试日志保存目录
+    
     # Docker 沙箱配置
     USE_DOCKER_SANDBOX: bool = True  # 是否使用 Docker 沙箱（推荐）
     DOCKER_SANDBOX_IMAGE: str = "bibobot-sandbox:latest"  # 沙箱镜像名

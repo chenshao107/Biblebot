@@ -3,6 +3,8 @@ LLM 调用封装 - 支持 function calling
 """
 import requests
 import json
+import os
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from loguru import logger
 from app.core.config import settings
@@ -15,6 +17,37 @@ class LLMClient:
         self.api_key = settings.LLM_API_KEY
         self.base_url = settings.LLM_BASE_URL
         self.model = settings.LLM_MODEL
+        self.debug_llm = settings.DEBUG_LLM_API
+        self.debug_log_dir = settings.DEBUG_LLM_LOG_DIR
+        self._call_count = 0
+    
+    def _save_debug_log(self, payload: dict, response: dict):
+        """保存 LLM API 调用日志到文件"""
+        if not self.debug_llm:
+            return
+        
+        try:
+            # 创建日志目录
+            os.makedirs(self.debug_log_dir, exist_ok=True)
+            
+            self._call_count += 1
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{self.debug_log_dir}/llm_call_{timestamp}_{self._call_count:03d}.json"
+            
+            log_data = {
+                "timestamp": datetime.now().isoformat(),
+                "call_count": self._call_count,
+                "model": self.model,
+                "request": payload,
+                "response": response
+            }
+            
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(log_data, f, ensure_ascii=False, indent=2)
+            
+            logger.debug(f"LLM 调试日志已保存: {filename}")
+        except Exception as e:
+            logger.warning(f"保存 LLM 调试日志失败: {e}")
     
     def chat(
         self,
@@ -65,11 +98,16 @@ class LLMClient:
             choice = result["choices"][0]
             message = choice["message"]
             
-            return {
+            response_data = {
                 "content": message.get("content"),
                 "tool_calls": message.get("tool_calls"),
                 "finish_reason": choice.get("finish_reason")
             }
+            
+            # 保存调试日志
+            self._save_debug_log(payload, result)
+            
+            return response_data
             
         except requests.exceptions.RequestException as e:
             logger.error(f"LLM API 调用失败: {e}")
