@@ -63,7 +63,7 @@ class BashTool(BaseTool):
 - 查找文件: find . -name "*.pdf"
 - PDF 文本搜索: pdfgrep "关键词" file.pdf
 
-注意：只能执行只读命令，不支持修改、删除或管道操作。"""
+注意：只能执行只读命令，不支持修改、删除。"""
     
     @property
     def parameters(self) -> Dict[str, Any]:
