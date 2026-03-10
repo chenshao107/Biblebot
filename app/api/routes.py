@@ -10,11 +10,15 @@ from concurrent.futures import ThreadPoolExecutor
 from loguru import logger
 from app.agent import Agent, AgentResponse, get_default_tools
 from app.services.rag.retriever import RAGEngine
+from app.core.config import settings
 
 router = APIRouter()
 
-# 线程池配置
-_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="agent_worker")
+# 线程池配置 - 从配置文件读取
+_executor = ThreadPoolExecutor(
+    max_workers=settings.THREAD_POOL_MAX_WORKERS, 
+    thread_name_prefix="agent_worker"
+)
 
 # ============== Agent 模式（主推） ==============
 

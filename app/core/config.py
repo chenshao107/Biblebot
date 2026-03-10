@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     DOCKER_MEMORY_LIMIT: str = "512m"  # Docker 内存限制
     DOCKER_CPU_QUOTA: int = 100000  # Docker CPU 限制（100000 = 1核）
     DOCKER_TIMEOUT: int = 60  # Docker 命令执行超时（秒）
+    
+    # 线程池配置（用于并发请求处理）
+    THREAD_POOL_MAX_WORKERS: int = 32  # 线程池最大工作线程数，建议设置为预期并发数的 1-2 倍
 
     # Pydantic 配置：自动读取 .env 文件
     model_config = SettingsConfigDict(
