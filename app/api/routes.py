@@ -58,26 +58,30 @@ async def agent_query(request: AgentRequest):
     if request.stream:
         # 流式响应 - 使用 asyncio.Queue 实现跨线程数据传递
         queue: asyncio.Queue = asyncio.Queue()
+        main_loop = asyncio.get_event_loop()  # 获取主线程的 event loop
         
         def run_in_thread():
             """在线程中执行 agent，将结果放入队列"""
             try:
                 for step in agent.run_stream(request.query, request.context):
-                    # 将结果放入队列（线程安全）
-                    asyncio.run_coroutine_threadsafe(
+                    # 将结果放入队列（线程安全），等待完成
+                    future = asyncio.run_coroutine_threadsafe(
                         queue.put(("step", step)), 
-                        asyncio.get_event_loop()
+                        main_loop
                     )
+                    future.result()  # 等待放入完成
                 # 标记完成
-                asyncio.run_coroutine_threadsafe(
+                future = asyncio.run_coroutine_threadsafe(
                     queue.put(("done", None)), 
-                    asyncio.get_event_loop()
+                    main_loop
                 )
+                future.result()
             except Exception as e:
-                asyncio.run_coroutine_threadsafe(
+                future = asyncio.run_coroutine_threadsafe(
                     queue.put(("error", str(e))), 
-                    asyncio.get_event_loop()
+                    main_loop
                 )
+                future.result()
         
         async def generate():
             """异步生成器，从队列中读取数据"""
@@ -168,24 +172,28 @@ async def chat_completions(request: ChatCompletionRequest):
         queue: asyncio.Queue = asyncio.Queue()
         response_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
         created = int(time.time())
+        main_loop = asyncio.get_event_loop()  # 获取主线程的 event loop
         
         def run_in_thread():
             """在线程中执行 agent，将结果放入队列"""
             try:
                 for step in agent.run_stream(query):
-                    asyncio.run_coroutine_threadsafe(
+                    future = asyncio.run_coroutine_threadsafe(
                         queue.put(("step", step)), 
-                        asyncio.get_event_loop()
+                        main_loop
                     )
-                asyncio.run_coroutine_threadsafe(
+                    future.result()
+                future = asyncio.run_coroutine_threadsafe(
                     queue.put(("done", None)), 
-                    asyncio.get_event_loop()
+                    main_loop
                 )
+                future.result()
             except Exception as e:
-                asyncio.run_coroutine_threadsafe(
+                future = asyncio.run_coroutine_threadsafe(
                     queue.put(("error", str(e))), 
-                    asyncio.get_event_loop()
+                    main_loop
                 )
+                future.result()
         
         async def generate():
             """异步生成器，从队列中读取数据并格式化为 OpenAI 流式格式"""
