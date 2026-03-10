@@ -13,3 +13,6 @@ loguru
 
 # Docker 沙箱支持
 docker
+
+# 压测工具
+aiohttp
