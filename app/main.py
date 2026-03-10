@@ -18,6 +18,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# OpenAI 兼容接口（根路径，供外部 UI 使用）
+app.include_router(router)
+
+# 原有 API（保留兼容）
 app.include_router(router, prefix="/api")
 
 @app.get("/")
