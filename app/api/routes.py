@@ -128,7 +128,7 @@ class ChatMessage(BaseModel):
     content: str
 
 class ChatCompletionRequest(BaseModel):
-    model: str = "agent-knowledge"
+    model: str = "bibobot"
     messages: List[ChatMessage]
     stream: bool = False
     temperature: Optional[float] = 0.7
@@ -279,7 +279,7 @@ async def list_models():
         "object": "list",
         "data": [
             {
-                "id": "agent-knowledge",
+                "id": "bibobot",
                 "object": "model",
                 "created": int(time.time()),
                 "owned_by": "knowledge-agent"
