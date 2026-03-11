@@ -4,6 +4,7 @@ Agent 核心 - LLM + 循环 + 工具调用
 import json
 import os
 import subprocess
+import threading
 from typing import List, Dict, Any, Optional, Generator
 from loguru import logger
 from app.agent.llm import LLMClient
@@ -212,8 +213,6 @@ class Agent:
                 "tool_args": dict (optional)
             }
         """
-        import threading
-        
         # 重置停止状态
         self.reset()
         
