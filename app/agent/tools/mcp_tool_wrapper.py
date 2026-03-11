@@ -1,6 +1,6 @@
 """
 MCP 工具包装器
-将 MCP 工具包装为 BiboBot 的 BaseTool 接口
+将 MCP 工具包装为 Biblebot 的 BaseTool 接口
 """
 from typing import Any, Dict, Optional
 from loguru import logger
@@ -12,7 +12,7 @@ from app.agent.tools.mcp_client import MCPClientManager, get_mcp_manager, MCPToo
 class MCPToolWrapper(BaseTool):
     """
     MCP 工具包装器
-    将外部 MCP 服务器的工具包装为 BiboBot 可用的工具
+    将外部 MCP 服务器的工具包装为 Biblebot 可用的工具
     """
     
     def __init__(self, mcp_tool: MCPTool, manager: MCPClientManager):

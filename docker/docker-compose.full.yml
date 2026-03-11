@@ -1,5 +1,5 @@
-# BiboBot 完整部署配置
-# 包含：Qdrant 向量数据库 + BiboBot 服务 + 可选的沙箱镜像构建
+# Biblebot 完整部署配置
+# 包含：Qdrant 向量数据库 + Biblebot 服务 + 可选的沙箱镜像构建
 
 version: '3.8'
 
@@ -24,14 +24,14 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - bibobot-network
+      - biblebot-network
 
-  # BiboBot 主服务
-  bibobot:
+  # Biblebot 主服务
+  biblebot:
     build:
       context: ..
       dockerfile: docker/Dockerfile.server
-    container_name: bibobot
+    container_name: biblebot
     ports:
       - "8000:8000"
     volumes:
@@ -47,13 +47,13 @@ services:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - USE_DOCKER_SANDBOX=true
-      - DOCKER_SANDBOX_IMAGE=bibobot-sandbox:latest
+      - DOCKER_SANDBOX_IMAGE=biblebot-sandbox:latest
     depends_on:
       qdrant:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - bibobot-network
+      - biblebot-network
     # 需要访问宿主机的 Docker（用于启动沙箱容器）
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -63,8 +63,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.sandbox
-    image: bibobot-sandbox:latest
-    container_name: bibobot-sandbox-builder
+    image: biblebot-sandbox:latest
+    container_name: biblebot-sandbox-builder
     # 这个服务只用于构建镜像，不保持运行
     entrypoint: ["echo", "Sandbox image built successfully"]
     deploy:
@@ -79,5 +79,5 @@ volumes:
     driver: local
 
 networks:
-  bibobot-network:
+  biblebot-network:
     driver: bridge

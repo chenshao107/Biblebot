@@ -1,10 +1,10 @@
-# BiboBot Sandbox - 安全的执行环境
+# Biblebot Sandbox - 安全的执行环境
 # 为 AI Agent 提供隔离的 Bash 和 Python 执行环境
 
 FROM python:3.10-slim-bookworm
 
-LABEL maintainer="BiboBot Team"
-LABEL description="Secure sandbox environment for BiboBot AI Agent tool execution"
+LABEL maintainer="Biblebot Team"
+LABEL description="Secure sandbox environment for Biblebot AI Agent tool execution"
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1

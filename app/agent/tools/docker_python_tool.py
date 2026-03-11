@@ -176,7 +176,7 @@ class DockerPythonTool(BaseTool):
             return ToolResult(
                 success=False,
                 output="",
-                error=f"执行失败: {str(e)}\n\n请确保:\n1. Docker 已安装并运行\n2. 当前用户有 Docker 权限\n3. 已构建沙箱镜像: docker build -f docker/Dockerfile.sandbox -t bibobot-sandbox:latest ."
+                error=f"执行失败: {str(e)}\n\n请确保:\n1. Docker 已安装并运行\n2. 当前用户有 Docker 权限\n3. 已构建沙箱镜像: docker build -f docker/Dockerfile.sandbox -t biblebot-sandbox:latest ."
             )
     
     def cleanup(self):

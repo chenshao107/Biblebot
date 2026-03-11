@@ -139,7 +139,7 @@ class ConcurrencyTester:
             }
         elif self.endpoint == "chat":
             return {
-                "model": "bibobot",
+                "model": "biblebot"
                 "messages": [{"role": "user", "content": self.query}],
                 "stream": self.stream
             }

@@ -80,7 +80,7 @@ class MCPClient:
                 "params": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
-                    "clientInfo": {"name": "bibobot-mcp-client", "version": "1.0.0"}
+                    "clientInfo": {"name": "biblebot-mcp-client", "version": "1.0.0"}
                 }
             }
             

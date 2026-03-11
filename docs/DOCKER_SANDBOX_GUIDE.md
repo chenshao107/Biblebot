@@ -38,7 +38,7 @@
 ┌─────────────────────────────────────────┐
 │              Host Machine               │
 │  ┌─────────────────────────────────┐   │
-│  │      BiboBot Application     │   │
+│  │      Biblebot Application     │   │
 │  │         (Docker Container)      │   │
 │  │  ┌─────────────────────────┐   │   │
 │  │  │    Agent Core (LLM)     │   │   │
@@ -83,10 +83,10 @@ docker-compose --version
 
 ```bash
 # 在项目根目录执行
-docker build -f docker/Dockerfile.sandbox -t bibobot-sandbox:latest .
+docker build -f docker/Dockerfile.sandbox -t biblebot-sandbox:latest .
 
 # 验证镜像构建成功
-docker images | grep bibobot-sandbox
+docker images | grep biblebot-sandbox
 ```
 
 ### 3. 配置环境变量
@@ -96,7 +96,7 @@ docker images | grep bibobot-sandbox
 ```bash
 # 启用 Docker 沙箱
 USE_DOCKER_SANDBOX=true
-DOCKER_SANDBOX_IMAGE=bibobot-sandbox:latest
+DOCKER_SANDBOX_IMAGE=biblebot-sandbox:latest
 DOCKER_MEMORY_LIMIT=512m
 DOCKER_CPU_QUOTA=100000
 DOCKER_TIMEOUT=60
@@ -111,9 +111,9 @@ DOCKER_TIMEOUT=60
 cd docker && docker-compose up -d
 
 # 2. 构建沙箱镜像
-docker build -f docker/Dockerfile.sandbox -t bibobot-sandbox:latest .
+docker build -f docker/Dockerfile.sandbox -t biblebot-sandbox:latest .
 
-# 3. 启动 BiboBot
+# 3. 启动 Biblebot
 python app/main.py
 ```
 
@@ -238,7 +238,7 @@ USE_DOCKER_SANDBOX=true          # 启用（推荐）
 USE_DOCKER_SANDBOX=false         # 禁用，使用原生实现
 
 # 沙箱镜像配置
-DOCKER_SANDBOX_IMAGE=bibobot-sandbox:latest
+DOCKER_SANDBOX_IMAGE=biblebot-sandbox:latest
 
 # 资源限制
 DOCKER_MEMORY_LIMIT=512m         # 内存限制（512MB）
@@ -296,7 +296,7 @@ RUN pip install --no-cache-dir \
 然后重新构建：
 
 ```bash
-docker build -f docker/Dockerfile.sandbox -t bibobot-sandbox:latest .
+docker build -f docker/Dockerfile.sandbox -t biblebot-sandbox:latest .
 ```
 
 ### 多会话隔离
@@ -373,14 +373,14 @@ docker run hello-world
 ### 问题 2: 镜像不存在
 
 ```
-Error: 镜像不存在: bibobot-sandbox:latest
+Error: 镜像不存在: biblebot-sandbox:latest
 ```
 
 **解决方案:**
 
 ```bash
 # 构建镜像
-docker build -f docker/Dockerfile.sandbox -t bibobot-sandbox:latest .
+docker build -f docker/Dockerfile.sandbox -t biblebot-sandbox:latest .
 ```
 
 ### 问题 3: 命令执行超时
@@ -424,7 +424,7 @@ DOCKER_MEMORY_LIMIT=1g  # .env 文件中
 | 场景 | 内存 |
 |------|------|
 | 沙箱容器 | ~50-100 MB |
-| BiboBot | ~500 MB - 2 GB |
+| Biblebot | ~500 MB - 2 GB |
 | Qdrant | ~200 MB - 1 GB |
 
 ## 🎯 最佳实践
@@ -445,7 +445,7 @@ DOCKER_MEMORY_LIMIT=1g  # .env 文件中
 
 ```bash
 # 查看运行中的沙箱容器
-docker ps | grep bibobot-sandbox
+docker ps | grep biblebot-sandbox
 
 # 进入沙箱容器调试
 docker exec -it <container_id> /bin/bash
@@ -454,7 +454,7 @@ docker exec -it <container_id> /bin/bash
 docker logs <container_id>
 
 # 清理所有沙箱容器
-docker ps -a | grep bibobot-sandbox | awk '{print $1}' | xargs docker rm -f
+docker ps -a | grep biblebot-sandbox | awk '{print $1}' | xargs docker rm -f
 ```
 
 ## 🚀 部署建议

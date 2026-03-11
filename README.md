@@ -1,4 +1,4 @@
-# Professional BiboBot 开发与调试手册
+# Professional Biblebot 开发与调试手册
 
 本项目是一个工业级的 RAG（检索增强生成）系统框架，核心特点是支持 **多格式文档摄取**、**混合搜索 (Dense + Sparse)**、**两阶段检索 (Recall + Rerank)** 以及 **智能 Agent 知识服务**。
 
@@ -15,7 +15,7 @@
 ## 1. 项目目录结构
 
 ```text
-bibobot/
+biblebot/
 ├── app/
 │   ├── api/                # API 层：FastAPI 路由定义
 │   │   └── routes.py       # 定义 /api/agent, /api/query 等接口
@@ -214,7 +214,7 @@ python app/main.py
 # 使用 Docker 快速启动
 docker run -d -p 3000:8080 \
   -e OPENAI_API_BASE_URL=http://host.docker.internal:8000/v1 \
-  -e OPENAI_API_KEY=sk-bibobot \
+  -e OPENAI_API_KEY=sk-biblebot \
   --name open-webui \
   ghcr.io/open-webui/open-webui:main
 ```
@@ -222,12 +222,12 @@ docker run -d -p 3000:8080 \
 **步骤 3：浏览器访问**
 - 打开 http://localhost:3000
 - 首次使用需要注册管理员账号
-- 进入对话界面，选择模型 `bibobot` 即可开始对话
+- 进入对话界面，选择模型 `biblebot` 即可开始对话
 
 **配置说明：**
 - **API 地址**：`http://localhost:8000/v1`（OpenAI 兼容端点）
-- **API Key**：任意填写，如 `sk-bibobot`（当前版本不验证）
-- **模型名称**：`bibobot`
+- **API Key**：任意填写，如 `sk-biblebot`（当前版本不验证）
+- **模型名称**：`biblebot`
 
 ### 6.3 Lobe Chat 对接步骤
 
@@ -235,7 +235,7 @@ docker run -d -p 3000:8080 \
 ```bash
 # 使用 Docker 启动
 docker run -d -p 3210:3210 \
-  -e OPENAI_API_KEY=sk-bibobot \
+  -e OPENAI_API_KEY=sk-biblebot \
   -e OPENAI_PROXY_URL=http://host.docker.internal:8000/v1 \
   --name lobe-chat \
   lobehub/lobe-chat
@@ -245,18 +245,18 @@ docker run -d -p 3210:3210 \
 - 访问 http://localhost:3210
 - 点击左下角「设置」→「语言模型」
 - 选择 OpenAI，配置如下：
-  - **API Key**：`sk-bibobot`
+  - **API Key**：`sk-biblebot`
   - **API 代理地址**：`http://localhost:8000/v1`
-  - **模型列表**：选择 `bibobot` 或手动输入
+  - **模型列表**：选择 `biblebot` 或手动输入
 
 ### 6.4 ChatGPT-Next-Web 对接步骤
 
 **步骤 1：启动服务**
 ```bash
 docker run -d -p 3001:3000 \
-  -e OPENAI_API_KEY=sk-bibobot \
+  -e OPENAI_API_KEY=sk-biblebot \
   -e BASE_URL=http://host.docker.internal:8000 \
-  -e CUSTOM_MODELS=-all,+bibobot \
+  -e CUSTOM_MODELS=-all,+biblebot \
   --name chatgpt-next-web \
   yidadaa/chatgpt-next-web
 ```
@@ -283,9 +283,9 @@ docker run -d -p 3001:3000 \
 # 非流式请求
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-bibobot" \
+  -H "Authorization: Bearer sk-biblebot" \
   -d '{
-    "model": "bibobot",
+    "model": "biblebot",
     "messages": [{"role": "user", "content": "介绍一下 RAG 技术"}],
     "stream": false
   }'
@@ -293,9 +293,9 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 # 流式请求
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-bibobot" \
+  -H "Authorization: Bearer sk-biblebot" \
   -d '{
-    "model": "bibobot",
+    "model": "biblebot",
     "messages": [{"role": "user", "content": "分析一下本地知识库"}],
     "stream": true
   }'

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BiboBot 启动脚本 - 简化开发和调试
+Biblebot 启动脚本 - 简化开发和调试
 
 用法:
     python start.py              # 启动服务
@@ -41,7 +41,7 @@ def build_sandbox_image():
     cmd = [
         "docker", "build",
         "-f", str(dockerfile),
-        "-t", "bibobot-sandbox:latest",
+        "-t", "biblebot-sandbox:latest",
         "."
     ]
     
@@ -63,14 +63,14 @@ def check_docker():
 def check_sandbox_image():
     """检查沙箱镜像是否存在"""
     result = subprocess.run(
-        ["docker", "images", "-q", "bibobot-sandbox:latest"],
+        ["docker", "images", "-q", "biblebot-sandbox:latest"],
         capture_output=True,
         text=True
     )
     return result.stdout.strip() != ""
 
 def main():
-    parser = argparse.ArgumentParser(description="BiboBot 启动脚本")
+    parser = argparse.ArgumentParser(description="Biblebot 启动脚本")
     parser.add_argument("--build", action="store_true", help="构建沙箱镜像")
     parser.add_argument("--debug", action="store_true", help="详细日志模式")
     parser.add_argument("--no-docker", action="store_true", help="不使用 Docker 沙箱")
@@ -114,7 +114,7 @@ def main():
                     env["USE_DOCKER_SANDBOX"] = "false"
     
     # 启动服务
-    print(f"\n{GREEN}🚀 启动 BiboBot 服务...{RESET}")
+    print(f"\n{GREEN}🚀 启动 Biblebot 服务...{RESET}")
     print(f"{GREEN}   访问: http://localhost:8000{RESET}")
     print(f"{GREEN}   API:  http://localhost:8000/api/agent{RESET}")
     print(f"{GREEN}   文档: http://localhost:8000/docs{RESET}\n")

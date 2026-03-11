@@ -1,10 +1,10 @@
-# BiboBot - 主服务镜像
+# Biblebot - 主服务镜像
 # 包含完整的 RAG 服务和 Agent 功能
 
 FROM python:3.10-slim-bookworm
 
-LABEL maintainer="BiboBot Team"
-LABEL description="BiboBot - AI Agent with RAG capabilities"
+LABEL maintainer="Biblebot Team"
+LABEL description="Biblebot - AI Agent with RAG capabilities"
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1

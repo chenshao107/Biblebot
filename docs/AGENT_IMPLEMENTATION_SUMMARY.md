@@ -1,6 +1,6 @@
 # Agent 架构完善总结
 
-本文档总结了本次为 BiboBot 项目添加的 Agent 功能和完善内容。
+本文档总结了本次为 Biblebot 项目添加的 Agent 功能和完善内容。
 
 ## ✅ 已完成的改进
 
@@ -361,7 +361,7 @@ print(answer)
 
 ## 🎉 总结
 
-本次完善为 BiboBot 项目添加了完整的 Agent 能力，包括：
+本次完善为 Biblebot 项目添加了完整的 Agent 能力，包括：
 
 ✅ **5 个实用工具**：RAG、Bash、Python、Web Search、Calculator  
 ✅ **完善的配置系统**：所有参数可从.env 配置  

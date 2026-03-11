@@ -35,7 +35,7 @@
 - 可以 pip install 新包
 - 无需受限的全局变量
 
-#### E. BiboBot 镜像 (`docker/Dockerfile.server`)
+#### E. Biblebot 镜像 (`docker/Dockerfile.server`)
 - 完整的服务镜像
 - 包含所有依赖
 - 支持 Docker-in-Docker（管理沙箱）
@@ -45,7 +45,7 @@
 #### 环境变量支持 (`app/core/config.py`)
 ```python
 USE_DOCKER_SANDBOX=true          # 启用/禁用
-DOCKER_SANDBOX_IMAGE=bibobot-sandbox:latest
+DOCKER_SANDBOX_IMAGE=biblebot-sandbox:latest
 DOCKER_MEMORY_LIMIT=512m
 DOCKER_CPU_QUOTA=100000
 DOCKER_TIMEOUT=60
@@ -60,7 +60,7 @@ DOCKER_TIMEOUT=60
 
 #### Docker Compose 编排 (`docker/docker-compose.full.yml`)
 - Qdrant 向量数据库
-- BiboBot 主服务
+- Biblebot 主服务
 - 沙箱镜像构建
 - 网络配置
 - 卷映射
@@ -172,7 +172,7 @@ bash_tool = DockerBashTool(
 
 ```bash
 # 1. 构建沙箱镜像
-docker build -f docker/Dockerfile.sandbox -t bibobot-sandbox:latest .
+docker build -f docker/Dockerfile.sandbox -t biblebot-sandbox:latest .
 
 # 2. 配置 .env
 USE_DOCKER_SANDBOX=true

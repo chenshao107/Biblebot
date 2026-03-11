@@ -5,8 +5,8 @@
 ### 1. 构建沙箱镜像（1 分钟）
 
 ```bash
-cd /home/chenshao/bibobot
-docker build -f docker/Dockerfile.sandbox -t bibobot-sandbox:latest .
+cd /home/chenshao/biblebot
+docker build -f docker/Dockerfile.sandbox -t biblebot-sandbox:latest .
 ```
 
 ### 2. 启用 Docker 模式（30 秒）
@@ -23,7 +23,7 @@ USE_DOCKER_SANDBOX=true
 # 启动 Qdrant
 cd docker && docker-compose up -d
 
-# 启动 BiboBot
+# 启动 Biblebot
 cd .. && python app/main.py
 ```
 
@@ -62,7 +62,7 @@ docker-compose -f docker-compose.full.yml up -d
 
 ```bash
 # 查看运行中的沙箱
-docker ps | grep bibobot-sandbox
+docker ps | grep biblebot-sandbox
 
 # 查看沙箱日志
 docker logs <container_id>
@@ -71,7 +71,7 @@ docker logs <container_id>
 docker exec -it <container_id> /bin/bash
 
 # 清理所有沙箱
-docker ps -a | grep bibobot-sandbox | awk '{print $1}' | xargs docker rm -f
+docker ps -a | grep biblebot-sandbox | awk '{print $1}' | xargs docker rm -f
 
 # 停止服务
 docker-compose -f docker-compose.full.yml down
@@ -82,7 +82,7 @@ docker-compose -f docker-compose.full.yml down
 ```bash
 # .env 文件
 USE_DOCKER_SANDBOX=true              # 启用 Docker 沙箱
-DOCKER_SANDBOX_IMAGE=bibobot-sandbox:latest
+DOCKER_SANDBOX_IMAGE=biblebot-sandbox:latest
 DOCKER_MEMORY_LIMIT=512m             # 内存限制
 DOCKER_CPU_QUOTA=100000              # CPU 限制
 DOCKER_TIMEOUT=60                    # 超时时间
@@ -93,7 +93,7 @@ DOCKER_TIMEOUT=60                    # 超时时间
 | 问题 | 解决方案 |
 |------|---------|
 | Docker 连接失败 | `sudo usermod -aG docker $USER` 后重新登录 |
-| 镜像不存在 | `docker build -f docker/Dockerfile.sandbox -t bibobot-sandbox:latest .` |
+| 镜像不存在 | `docker build -f docker/Dockerfile.sandbox -t biblebot-sandbox:latest .` |
 | 命令超时 | 增加 `DOCKER_TIMEOUT=120` |
 | 内存不足 | 增加 `DOCKER_MEMORY_LIMIT=1g` |
 

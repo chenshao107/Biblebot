@@ -412,4 +412,4 @@ python scripts/agent_cli.py
 
 ---
 
-**恭喜！你的 BiboBot 现在拥有了一个强大、灵活且安全的 Agent 系统！** 🎊
+**恭喜！你的 Biblebot 现在拥有了一个强大、灵活且安全的 Agent 系统！** 🎊
