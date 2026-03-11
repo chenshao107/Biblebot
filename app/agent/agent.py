@@ -91,6 +91,16 @@ class Agent:
         self.tools = {tool.name: tool for tool in tools}
         self.max_iterations = max_iterations or settings.AGENT_MAX_ITERATIONS
         self.knowledge_tree = knowledge_tree
+        self._stop_event = threading.Event()  # 用于取消当前任务
+    
+    def stop(self):
+        """停止当前正在运行的 Agent 任务"""
+        self._stop_event.set()
+        logger.info("🛑 Agent 收到停止信号")
+    
+    def reset(self):
+        """重置停止状态，准备新任务"""
+        self._stop_event.clear()
     
     def _check_tree_command(self):
         """检查 tree 命令是否存在"""
@@ -196,12 +206,17 @@ class Agent:
         
         Yields:
             {
-                "type": "thinking" | "tool_call" | "tool_result" | "final_answer",
+                "type": "thinking" | "tool_call" | "tool_result" | "final_answer" | "stopped",
                 "content": str,
                 "tool_name": str (optional),
                 "tool_args": dict (optional)
             }
         """
+        import threading
+        
+        # 重置停止状态
+        self.reset()
+        
         # 构建初始消息
         knowledge_tree = self._get_knowledge_tree()
         tools_list = list(self.tools.values())
@@ -222,6 +237,15 @@ class Agent:
         tools_schema = self._get_tools_schema()
         
         for iteration in range(self.max_iterations):
+            # 检查是否收到停止信号
+            if self._stop_event.is_set():
+                logger.info("🛑 Agent 迭代被用户停止")
+                yield {
+                    "type": "stopped",
+                    "content": "用户已停止生成"
+                }
+                return
+            
             logger.info(f"🤔 Agent 迭代 {iteration + 1}/{self.max_iterations}")
                     
             # 调用 LLM
@@ -247,6 +271,15 @@ class Agent:
                         
                 # 执行每个工具调用
                 for tc in tool_calls:
+                    # 检查是否收到停止信号
+                    if self._stop_event.is_set():
+                        logger.info("🛑 Agent 工具调用被用户停止")
+                        yield {
+                            "type": "stopped",
+                            "content": "用户已停止生成"
+                        }
+                        return
+                    
                     logger.info(f"📞 调用工具：{tc['name']}")
                     yield {
                         "type": "tool_call",

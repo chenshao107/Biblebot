@@ -160,7 +160,18 @@ async def agent_query(request: AgentRequest):
             final_answer = ""
             try:
                 while True:
-                    msg_type, data = await queue.get()
+                    # 检查客户端是否断开（通过取消任务）
+                    if asyncio.current_task().cancelled():
+                        logger.info("客户端断开连接，停止 Agent")
+                        agent.stop()
+                        break
+                    
+                    try:
+                        msg_type, data = await asyncio.wait_for(queue.get(), timeout=0.5)
+                    except asyncio.TimeoutError:
+                        # 超时后继续循环，检查取消状态
+                        continue
+                    
                     if msg_type == "done":
                         break
                     elif msg_type == "error":
@@ -169,6 +180,10 @@ async def agent_query(request: AgentRequest):
                     else:
                         if data.get("type") == "final_answer":
                             final_answer = data.get("content", "")
+                        elif data.get("type") == "stopped":
+                            # Agent 被停止
+                            yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+                            break
                         yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
                 
                 # 记录助手回复到历史
@@ -176,6 +191,11 @@ async def agent_query(request: AgentRequest):
                     _add_to_history(request.session_id, "assistant", final_answer)
                 
                 yield "data: [DONE]\n\n"
+            except asyncio.CancelledError:
+                # 客户端断开连接
+                logger.info("客户端断开连接（CancelledError），停止 Agent")
+                agent.stop()
+                raise
             except Exception as e:
                 logger.error(f"流式响应错误: {e}")
                 yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
@@ -301,7 +321,18 @@ async def chat_completions(request: ChatCompletionRequest):
             full_content = ""
             try:
                 while True:
-                    msg_type, data = await queue.get()
+                    # 检查客户端是否断开（通过取消任务）
+                    if asyncio.current_task().cancelled():
+                        logger.info("客户端断开连接，停止 Agent")
+                        agent.stop()
+                        break
+                    
+                    try:
+                        msg_type, data = await asyncio.wait_for(queue.get(), timeout=0.5)
+                    except asyncio.TimeoutError:
+                        # 超时后继续循环，检查取消状态
+                        continue
+                    
                     if msg_type == "done":
                         break
                     elif msg_type == "error":
@@ -309,7 +340,11 @@ async def chat_completions(request: ChatCompletionRequest):
                         break
                     else:
                         step = data
-                        if step["type"] == "thinking":
+                        if step["type"] == "stopped":
+                            # Agent 被停止
+                            yield f"data: {json.dumps({'id': response_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'content': '[已停止]'}, 'finish_reason': 'stop'}]}, ensure_ascii=False)}\n\n"
+                            break
+                        elif step["type"] == "thinking":
                             content = f"💭 {step['content']}\n\n"
                             full_content += content
                             yield f"data: {json.dumps({'id': response_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'content': content}, 'finish_reason': None}]}, ensure_ascii=False)}\n\n"
@@ -336,6 +371,11 @@ async def chat_completions(request: ChatCompletionRequest):
                 # 发送结束标记
                 yield f"data: {json.dumps({'id': response_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]}, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
+            except asyncio.CancelledError:
+                # 客户端断开连接
+                logger.info("客户端断开连接（CancelledError），停止 Agent")
+                agent.stop()
+                raise
             except Exception as e:
                 logger.error(f"流式响应错误: {e}")
                 yield f"data: {json.dumps({'id': response_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'content': f'错误: {e}'}, 'finish_reason': 'stop'}]}, ensure_ascii=False)}\n\n"
