@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     PYTHON_TOOL_TIMEOUT: int = 30  # Python 执行超时时间（秒）
     BASH_WORK_DIR: Optional[str] = None  # Bash 工具工作目录，默认为 DATA_RAW_DIR
     
+    # 对话历史配置
+    CONVERSATION_MAX_HISTORY: int = 20  # 每个会话保留的最大对话轮数（一轮 = 用户+助手）
+    CONVERSATION_MAX_MESSAGE_LENGTH: int = 500  # 单条消息在上下文中最大长度（字符）
+    
     # 工具安全控制（调试期可禁用）
     ENABLE_BASH_WHITELIST: bool = False  # 是否启用 Bash 命令白名单检查，默认禁用方便调试
     ENABLE_PYTHON_RESTRICTIONS: bool = False  # 是否启用 Python 执行限制，默认禁用方便调试

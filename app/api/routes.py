@@ -7,6 +7,7 @@ import time
 import uuid
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from collections import defaultdict
 from loguru import logger
 from app.agent import Agent, AgentResponse, get_default_tools
 from app.services.rag.retriever import RAGEngine
@@ -20,12 +21,17 @@ _executor = ThreadPoolExecutor(
     thread_name_prefix="agent_worker"
 )
 
+# 对话历史存储（内存中，按 session_id 分组）
+# 格式: {session_id: [{"role": "user"/"assistant", "content": "..."}, ...]}
+_conversation_history: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+
 # ============== Agent 模式（主推） ==============
 
 class AgentRequest(BaseModel):
     query: str
     context: Optional[str] = None
     stream: bool = False
+    session_id: Optional[str] = None  # 对话会话 ID，用于维护上下文
 
 class AgentStepResponse(BaseModel):
     type: str  # thinking, tool_call, tool_result, final_answer
@@ -47,6 +53,50 @@ def get_agent() -> Agent:
         _agent = Agent(tools=get_default_tools())
     return _agent
 
+def _get_conversation_context(session_id: Optional[str]) -> str:
+    """获取对话历史作为上下文"""
+    if not session_id or session_id not in _conversation_history:
+        return ""
+    
+    history = _conversation_history[session_id]
+    if not history:
+        return ""
+    
+    max_history = settings.CONVERSATION_MAX_HISTORY
+    max_length = settings.CONVERSATION_MAX_MESSAGE_LENGTH
+    
+    # 构建对话历史文本
+    context_parts = ["=== 对话历史 ==="]
+    for msg in history[-max_history * 2:]:  # 只取最近的消息（一轮=2条消息）
+        role = "用户" if msg["role"] == "user" else "助手"
+        content = msg["content"][:max_length]  # 限制单条消息长度
+        if len(msg["content"]) > max_length:
+            content += "..."
+        context_parts.append(f"{role}: {content}")
+    
+    context_parts.append("=== 当前问题 ===")
+    return "\n".join(context_parts)
+
+
+def _add_to_history(session_id: Optional[str], role: str, content: str):
+    """添加消息到对话历史"""
+    if not session_id:
+        return
+    
+    max_history = settings.CONVERSATION_MAX_HISTORY
+    
+    _conversation_history[session_id].append({
+        "role": role,
+        "content": content,
+        "timestamp": time.time()
+    })
+    
+    # 限制历史长度，保留最近的消息（一轮=2条消息，所以乘以2）
+    max_messages = max_history * 2
+    if len(_conversation_history[session_id]) > max_messages:
+        _conversation_history[session_id] = _conversation_history[session_id][-max_messages:]
+
+
 @router.post("/agent")
 async def agent_query(request: AgentRequest):
     """
@@ -54,10 +104,24 @@ async def agent_query(request: AgentRequest):
     
     - 非流式: 返回完整的执行过程和最终答案
     - 流式: 返回 SSE 流，逐步输出执行过程
+    - 支持 session_id 维护对话上下文
     
     使用线程池支持并发请求，多个用户可以同时访问。
     """
     agent = get_agent()
+    
+    # 获取对话历史并构建上下文
+    history_context = _get_conversation_context(request.session_id)
+    if history_context:
+        if request.context:
+            full_context = f"{history_context}\n\n额外背景：\n{request.context}"
+        else:
+            full_context = history_context
+    else:
+        full_context = request.context
+    
+    # 记录用户消息到历史
+    _add_to_history(request.session_id, "user", request.query)
     
     if request.stream:
         # 流式响应 - 使用 asyncio.Queue 实现跨线程数据传递
@@ -67,7 +131,7 @@ async def agent_query(request: AgentRequest):
         def run_in_thread():
             """在线程中执行 agent，将结果放入队列"""
             try:
-                for step in agent.run_stream(request.query, request.context):
+                for step in agent.run_stream(request.query, full_context):
                     # 将结果放入队列（线程安全），等待完成
                     future = asyncio.run_coroutine_threadsafe(
                         queue.put(("step", step)), 
@@ -93,6 +157,7 @@ async def agent_query(request: AgentRequest):
             loop = asyncio.get_event_loop()
             future = loop.run_in_executor(_executor, run_in_thread)
             
+            final_answer = ""
             try:
                 while True:
                     msg_type, data = await queue.get()
@@ -102,7 +167,14 @@ async def agent_query(request: AgentRequest):
                         yield f"data: {json.dumps({'type': 'error', 'content': data}, ensure_ascii=False)}\n\n"
                         break
                     else:
+                        if data.get("type") == "final_answer":
+                            final_answer = data.get("content", "")
                         yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+                
+                # 记录助手回复到历史
+                if final_answer and request.session_id:
+                    _add_to_history(request.session_id, "assistant", final_answer)
+                
                 yield "data: [DONE]\n\n"
             except Exception as e:
                 logger.error(f"流式响应错误: {e}")
@@ -116,14 +188,19 @@ async def agent_query(request: AgentRequest):
         # 非流式响应 - 在线程池中执行
         def run_agent():
             response = AgentResponse()
-            for step in agent.run_stream(request.query, request.context):
+            for step in agent.run_stream(request.query, full_context):
                 response.add_step(step)
-            return response.to_dict()
+            return response
         
         try:
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(_executor, run_agent)
-            return result
+            response = await loop.run_in_executor(_executor, run_agent)
+            
+            # 记录助手回复到历史
+            if response.final_answer and request.session_id:
+                _add_to_history(request.session_id, "assistant", response.final_answer)
+            
+            return response.to_dict()
         except Exception as e:
             logger.error(f"Agent 执行失败: {e}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -161,6 +238,7 @@ async def chat_completions(request: ChatCompletionRequest):
     OpenAI 兼容的聊天完成接口
     供 LobeChat、ChatGPT-Next-Web 等客户端使用
     
+    支持完整的对话上下文，使用 messages 中的历史记录。
     使用线程池支持并发请求。
     """
     # 提取用户最后一条消息作为查询
@@ -169,6 +247,18 @@ async def chat_completions(request: ChatCompletionRequest):
         raise HTTPException(status_code=400, detail="No user message found")
     
     query = user_messages[-1].content
+    
+    # 构建对话历史上下文（排除最后一条用户消息，因为它作为当前查询）
+    conversation_parts = []
+    for msg in request.messages[:-1]:  # 排除最后一条
+        role = "用户" if msg.role == "user" else "助手"
+        content = msg.content[:1000]  # 限制长度
+        conversation_parts.append(f"{role}: {content}")
+    
+    context = ""
+    if conversation_parts:
+        context = "=== 对话历史 ===\n" + "\n".join(conversation_parts[-10:])  # 最近10轮
+    
     agent = get_agent()
     
     if request.stream:
@@ -181,7 +271,7 @@ async def chat_completions(request: ChatCompletionRequest):
         def run_in_thread():
             """在线程中执行 agent，将结果放入队列"""
             try:
-                for step in agent.run_stream(query):
+                for step in agent.run_stream(query, context):
                     future = asyncio.run_coroutine_threadsafe(
                         queue.put(("step", step)), 
                         main_loop
@@ -257,7 +347,7 @@ async def chat_completions(request: ChatCompletionRequest):
         # 非流式响应 - 在线程池中执行
         def run_agent():
             response = AgentResponse()
-            for step in agent.run_stream(query):
+            for step in agent.run_stream(query, context):
                 response.add_step(step)
             return response
         
