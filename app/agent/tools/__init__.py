@@ -1,7 +1,9 @@
 """
 工具注册模块 - 集中管理所有可用工具
 支持 Docker 沙箱模式和原生模式自动切换
+支持 MCP (Model Context Protocol) 工具接入
 """
+import json
 from typing import List, Dict, Type
 from loguru import logger
 from app.agent.tools.base import BaseTool, ToolResult
@@ -57,6 +59,32 @@ TOOL_REGISTRY: Dict[str, Type[BaseTool]] = {
 }
 
 
+def _get_mcp_tools() -> List[BaseTool]:
+    """获取 MCP 工具（如果启用）"""
+    if not settings.ENABLE_MCP_TOOLS:
+        return []
+    
+    if not settings.MCP_SERVERS_CONFIG:
+        logger.warning("MCP 工具已启用但未配置 MCP_SERVERS_CONFIG")
+        return []
+    
+    try:
+        from app.agent.tools.mcp_tool_wrapper import MCPToolFactory
+        
+        mcp_configs = json.loads(settings.MCP_SERVERS_CONFIG)
+        logger.info(f"正在加载 MCP 工具，配置服务器: {list(mcp_configs.keys())}")
+        
+        mcp_tools = MCPToolFactory.create_tools_from_config(mcp_configs)
+        return mcp_tools
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"MCP_SERVERS_CONFIG JSON 解析失败: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"加载 MCP 工具失败: {e}")
+        return []
+
+
 def get_default_tools() -> List[BaseTool]:
     """获取默认的工具集（根据配置自动选择 Docker 或原生实现）"""
     tools = [
@@ -72,6 +100,10 @@ def get_default_tools() -> List[BaseTool]:
         tools.append(web_tool)
     except Exception as e:
         logger.warning(f"WebSearchTool 初始化失败（可能未配置 API key）: {e}")
+    
+    # 加载 MCP 工具（如果启用）
+    mcp_tools = _get_mcp_tools()
+    tools.extend(mcp_tools)
     
     # 记录使用的实现
     sandbox_mode = "Docker 沙箱" if settings.USE_DOCKER_SANDBOX else "原生"
@@ -109,4 +141,6 @@ __all__ = [
     "get_tool_by_name",
     "get_available_tools",
     "register_tool",
+    # MCP 相关
+    "MCPToolFactory",
 ]

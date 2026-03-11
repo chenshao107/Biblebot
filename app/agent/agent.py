@@ -11,21 +11,49 @@ from app.agent.tools.base import BaseTool, ToolResult
 from app.core.config import settings
 
 
-def get_system_prompt(knowledge_tree: str = "") -> str:
-    """生成系统 Prompt，包含知识库结构信息"""
+def get_system_prompt(knowledge_tree: str = "", tools: List[BaseTool] = None) -> str:
+    """生成系统 Prompt，包含知识库结构信息和可用工具"""
     tree_info = f"\n知识库结构：\n{knowledge_tree}\n" if knowledge_tree else ""
+    
+    # 构建工具列表描述
+    tools_list = []
+    mcp_tools = []
+    
+    if tools:
+        for tool in tools:
+            tool_desc = f"- **{tool.name}**: {tool.description}"
+            if tool.name.startswith(("filesystem_", "fetch_", "github_", "sqlite_", "git_", 
+                                     "brave_search_", "puppeteer_", "redis_")):
+                mcp_tools.append(tool_desc)
+            else:
+                tools_list.append(tool_desc)
+    else:
+        # 默认工具列表（向后兼容）
+        tools_list = [
+            "- **search_knowledge**: 在知识库中进行语义搜索（RAG检索）",
+            "- **run_bash**: 执行 bash 命令来探索文件（如 ls, cat, head, tail, grep, rg, find 等）",
+            "- **run_python**: 执行 Python 代码进行数据分析或复杂处理",
+            "- **calculator**: 执行数学计算",
+            "- **web_search**: 搜索互联网获取最新信息"
+        ]
+    
+    # 构建工具说明
+    tools_section = "\n".join(tools_list) if tools_list else ""
+    mcp_section = ""
+    if mcp_tools:
+        mcp_section = "\n\n**MCP 扩展工具**（通过 Model Context Protocol 接入的外部工具）:\n" + "\n".join(mcp_tools)
     
     return f"""你是一个智能知识助手，类似于Claude Code、Cursor的AI助手，可以通过各种工具来回答用户的问题。
 {tree_info}
 你有以下工具可用：
-1. **search_knowledge**: 在知识库中进行语义搜索（RAG检索）
-2. **run_bash**: 执行 bash 命令来探索文件（如 ls, cat, head, tail, grep, rg, find 等）
-3. **run_python**: 执行 Python 代码进行数据分析或复杂处理
+{tools_section}{mcp_section}
 
 工作策略：
 - 对于简单的知识查询，优先使用 search_knowledge 快速在现成的RAG知识库中粗略搜索。搜索的目的仅仅是初步定位与问题相关的内容的大致位置（我特地在RAG搜索结果里加入了当前片段出自于哪的信息，请你务必利用。）。为了更准确地获取答案，请通过bash命令或者python命令来查看原文的特定片段。
 - 对于需要探索文件结构、查找具体内容的任务，使用 run_bash
 - 对于需要数据分析、格式转换的任务，使用 run_python
+- 对于需要获取网页内容的任务，可以使用 fetch_* 工具（如果可用）
+- 对于需要文件系统操作的任务，可以使用 filesystem_* 工具（如果可用）
 - 你可以组合使用多个工具来完成复杂任务
 - 每次工具调用后，仔细分析结果，决定是否需要继续探索。当你能确定答案时，请立即给出最终答案。
 
@@ -33,6 +61,7 @@ def get_system_prompt(knowledge_tree: str = "") -> str:
 - search_knowledge: 建议最多 2-3 次，除非你认为当前知识库还有未挖掘的信息，或者查询不够、有必要延伸查找某些东西能完善回答
 - run_bash: 建议最多 2-3 次，用于查看已定位的原文片段
 - run_python: 仅在需要数据分析时使用
+- MCP 工具: 根据具体任务需求使用
 
 重要提醒：
 - 如果已经获得足够信息能回答用户问题，请立即停止调用工具，直接给出最终答案
@@ -175,7 +204,8 @@ class Agent:
         """
         # 构建初始消息
         knowledge_tree = self._get_knowledge_tree()
-        system_prompt = get_system_prompt(knowledge_tree)
+        tools_list = list(self.tools.values())
+        system_prompt = get_system_prompt(knowledge_tree, tools_list)
         messages = [
             {"role": "system", "content": system_prompt}
         ]
