@@ -186,4 +186,126 @@ PYTHON_TOOL_TIMEOUT=30       # Python 超时（秒）
 SERPER_API_KEY=xxx           # 网络搜索 API Key
 ```
 
+---
+
+## 6. 对接 AI 前端界面
+
+本项目提供 **OpenAI 兼容 API**，可无缝对接主流 AI 对话前端：
+
+### 6.1 支持的 AI 前端
+
+| 前端工具 | 特点 | 对接难度 |
+|---------|------|---------|
+| [Open WebUI](https://github.com/open-webui/open-webui) | 功能丰富、支持多用户、界面美观 | ⭐ 简单 |
+| [Lobe Chat](https://github.com/lobehub/lobe-chat) | 现代化 UI、插件生态丰富 | ⭐ 简单 |
+| [ChatGPT-Next-Web](https://github.com/ChatGPTNextWeb/ChatGPT-Next-Web) | 轻量快速、跨平台支持 | ⭐ 简单 |
+| [Chatbox](https://github.com/Bin-Huang/chatbox) | 桌面客户端、开箱即用 | ⭐ 简单 |
+
+### 6.2 Open WebUI 对接步骤
+
+**步骤 1：启动本服务**
+```bash
+python app/main.py
+# 服务将运行在 http://localhost:8000
+```
+
+**步骤 2：启动 Open WebUI**
+```bash
+# 使用 Docker 快速启动
+docker run -d -p 3000:8080 \
+  -e OPENAI_API_BASE_URL=http://host.docker.internal:8000/v1 \
+  -e OPENAI_API_KEY=sk-bibobot \
+  --name open-webui \
+  ghcr.io/open-webui/open-webui:main
+```
+
+**步骤 3：浏览器访问**
+- 打开 http://localhost:3000
+- 首次使用需要注册管理员账号
+- 进入对话界面，选择模型 `bibobot` 即可开始对话
+
+**配置说明：**
+- **API 地址**：`http://localhost:8000/v1`（OpenAI 兼容端点）
+- **API Key**：任意填写，如 `sk-bibobot`（当前版本不验证）
+- **模型名称**：`bibobot`
+
+### 6.3 Lobe Chat 对接步骤
+
+**步骤 1：启动 Lobe Chat**
+```bash
+# 使用 Docker 启动
+docker run -d -p 3210:3210 \
+  -e OPENAI_API_KEY=sk-bibobot \
+  -e OPENAI_PROXY_URL=http://host.docker.internal:8000/v1 \
+  --name lobe-chat \
+  lobehub/lobe-chat
+```
+
+**步骤 2：配置语言模型**
+- 访问 http://localhost:3210
+- 点击左下角「设置」→「语言模型」
+- 选择 OpenAI，配置如下：
+  - **API Key**：`sk-bibobot`
+  - **API 代理地址**：`http://localhost:8000/v1`
+  - **模型列表**：选择 `bibobot` 或手动输入
+
+### 6.4 ChatGPT-Next-Web 对接步骤
+
+**步骤 1：启动服务**
+```bash
+docker run -d -p 3001:3000 \
+  -e OPENAI_API_KEY=sk-bibobot \
+  -e BASE_URL=http://host.docker.internal:8000 \
+  -e CUSTOM_MODELS=-all,+bibobot \
+  --name chatgpt-next-web \
+  yidadaa/chatgpt-next-web
+```
+
+**步骤 2：访问使用**
+- 打开 http://localhost:3001
+- 在设置中确认 API 地址和模型配置
+- 开始对话
+
+### 6.5 API 端点说明
+
+本项目提供以下 OpenAI 兼容端点：
+
+| 端点 | 路径 | 说明 |
+|-----|------|------|
+| 对话完成 | `POST /v1/chat/completions` | 标准 OpenAI 格式，支持流式 |
+| 模型列表 | `GET /v1/models` | 返回可用模型列表 |
+| Agent 接口 | `POST /api/agent` | 原生接口，功能更丰富 |
+| RAG 检索 | `POST /api/query` | 纯检索接口 |
+
+### 6.6 手动测试 OpenAI 兼容接口
+
+```bash
+# 非流式请求
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-bibobot" \
+  -d '{
+    "model": "bibobot",
+    "messages": [{"role": "user", "content": "介绍一下 RAG 技术"}],
+    "stream": false
+  }'
+
+# 流式请求
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-bibobot" \
+  -d '{
+    "model": "bibobot",
+    "messages": [{"role": "user", "content": "分析一下本地知识库"}],
+    "stream": true
+  }'
+```
+
+### 6.7 注意事项
+
+1. **网络访问**：如果前端使用 Docker 部署，需要使用 `host.docker.internal` 访问宿主机服务
+2. **CORS 支持**：服务已默认开启跨域，前端可直接访问
+3. **流式响应**：支持 SSE 流式输出，可实时看到 Agent 思考过程
+4. **对话历史**：通过 `messages` 参数传递历史记录，Agent 会自动维护上下文
+
 
