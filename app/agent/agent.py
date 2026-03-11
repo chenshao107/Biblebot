@@ -45,7 +45,7 @@ def get_system_prompt(knowledge_tree: str = "", tools: List[BaseTool] = None) ->
     
     return f"""你是一个智能知识助手，类似于Claude Code、Cursor的AI助手，可以通过各种工具来回答用户的问题。
 {tree_info}
-你有以下工具可用：
+你有以下工具可用，并且可以一次可以调用多个工具：
 {tools_section}{mcp_section}
 
 工作策略：
