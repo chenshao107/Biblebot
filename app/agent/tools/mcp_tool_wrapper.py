@@ -145,9 +145,16 @@ class MCPToolFactory:
         # 初始化所有服务器并获取工具
         if manager.clients:
             try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                results = loop.run_until_complete(manager.initialize_all())
+                # 检查是否已经在事件循环中
+                try:
+                    loop = asyncio.get_running_loop()
+                    # 如果在运行中的事件循环中，使用 nest_asyncio 来允许嵌套
+                    import nest_asyncio
+                    nest_asyncio.apply()
+                    results = asyncio.get_event_loop().run_until_complete(manager.initialize_all())
+                except RuntimeError:
+                    # 没有运行中的事件循环，正常创建
+                    results = asyncio.run(manager.initialize_all())
                 
                 # 检查初始化结果
                 for server_name, success in results.items():
@@ -160,8 +167,6 @@ class MCPToolFactory:
                             logger.info(f"  ✅ 加载工具: {wrapper.name}")
                     else:
                         logger.warning(f"  ❌ MCP 服务器 {server_name} 初始化失败")
-                
-                loop.close()
                 
             except Exception as e:
                 logger.error(f"初始化 MCP 工具失败: {e}")
