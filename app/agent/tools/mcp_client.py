@@ -5,6 +5,8 @@ MCP (Model Context Protocol) 客户端
 import asyncio
 import json
 import subprocess
+import threading
+import time
 from typing import Any, Dict, List, Optional, Callable
 from dataclasses import dataclass
 from loguru import logger
@@ -43,6 +45,8 @@ class MCPClient:
         self.process: Optional[subprocess.Popen] = None
         self._tools: List[MCPTool] = []
         self._initialized = False
+        self._request_id = 0
+        self._lock = threading.Lock()
     
     async def initialize(self) -> bool:
         """
@@ -95,6 +99,12 @@ class MCPClient:
             logger.error(f"❌ MCP 服务器 {self.server_name} 启动失败: {e}")
             return False
     
+    def _get_next_request_id(self) -> int:
+        """获取下一个请求 ID（线程安全）"""
+        with self._lock:
+            self._request_id += 1
+            return self._request_id
+    
     async def _send_request(self, request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """发送 JSON-RPC 请求并获取响应"""
         if not self.process or self.process.poll() is not None:
@@ -102,16 +112,64 @@ class MCPClient:
             return None
         
         try:
-            # 发送请求
+            # 发送请求（加锁保证并发安全）
             request_line = json.dumps(request) + "\n"
-            self.process.stdin.write(request_line)
-            self.process.stdin.flush()
             
-            # 读取响应（简单实现，实际可能需要更复杂的处理）
-            response_line = self.process.stdout.readline()
-            if response_line:
+            with self._lock:
+                # 检查进程仍然存活
+                if self.process.poll() is not None:
+                    logger.error(f"MCP 服务器 {self.server_name} 进程已退出")
+                    return None
+                
+                self.process.stdin.write(request_line)
+                self.process.stdin.flush()
+                
+                # 读取响应，带超时重试
+                max_retries = 3
+                for attempt in range(max_retries):
+                    # 使用 asyncio.wait_for 实现超时
+                    import asyncio
+                    try:
+                        response_line = await asyncio.wait_for(
+                            asyncio.get_event_loop().run_in_executor(
+                                None, self.process.stdout.readline
+                            ),
+                            timeout=30.0  # 30秒超时
+                        )
+                        break
+                    except asyncio.TimeoutError:
+                        if attempt < max_retries - 1:
+                            logger.warning(f"MCP 请求超时，重试 {attempt + 1}/{max_retries}")
+                            continue
+                        else:
+                            logger.error(f"MCP 请求超时，已重试 {max_retries} 次")
+                            return None
+                else:
+                    return None
+            
+            # 解析响应（在锁外进行）
+            if not response_line:
+                # 读取 stderr 获取错误信息
+                stderr_data = ""
+                try:
+                    # 非阻塞读取 stderr
+                    import select
+                    if select.select([self.process.stderr], [], [], 0.1)[0]:
+                        stderr_data = self.process.stderr.readline()
+                except:
+                    pass
+                
+                if stderr_data:
+                    logger.error(f"MCP 服务器 {self.server_name} stderr: {stderr_data}")
+                else:
+                    logger.error(f"MCP 服务器 {self.server_name} 返回空响应")
+                return None
+            
+            try:
                 return json.loads(response_line)
-            return None
+            except json.JSONDecodeError as e:
+                logger.error(f"MCP 响应 JSON 解析失败: {e}, 原始数据: {response_line[:200]}")
+                return None
             
         except Exception as e:
             logger.error(f"发送 MCP 请求失败: {e}")
@@ -157,7 +215,7 @@ class MCPClient:
         
         request = {
             "jsonrpc": "2.0",
-            "id": 3,
+            "id": self._get_next_request_id(),
             "method": "tools/call",
             "params": {
                 "name": tool_name,
