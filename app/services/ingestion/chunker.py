@@ -48,12 +48,16 @@ class MarkdownChunker:
                 "chunk_index": len(chunks),
             }
             
+            # 构建路径前缀，用于增强 embedding 语义
+            # 格式: [RK3506/uboot/README.md] 或 [RK3506/README.md]
+            path_prefix = f"[{path_info.get('full_path', doc_id)}]"
+            
             # If section is too large, sub-chunk it
             if len(section_content) > self.chunk_size:
                 sub_chunks = self._sliding_window(section_content, self.chunk_size, self.chunk_overlap)
                 for i, sub in enumerate(sub_chunks):
-                    # 每个子分片都添加标题，增强 embedding 语义
-                    content = f"{section_title}\n{sub}"
+                    # 每个子分片都添加标题和路径前缀，增强 embedding 语义
+                    content = f"{path_prefix}\n{section_title}\n{sub}"
                     chunks.append({
                         "content": content,
                         "metadata": {
@@ -64,8 +68,8 @@ class MarkdownChunker:
                         }
                     })
             else:
-                # 小分片也添加标题
-                content = f"{section_title}\n{section_content}"
+                # 小分片也添加标题和路径前缀
+                content = f"{path_prefix}\n{section_title}\n{section_content}"
                 chunks.append({
                     "content": content,
                     "metadata": {
