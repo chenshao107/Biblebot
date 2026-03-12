@@ -37,6 +37,8 @@ class MarkdownChunker:
         for section in sections:
             section_content = section['content']
             section_title = section['title']
+            start_line = section.get('start_line', 0)
+            end_line = section.get('end_line', 0)
             
             # 构建元数据
             metadata = {
@@ -46,6 +48,8 @@ class MarkdownChunker:
                 "full_path": path_info.get("full_path", doc_id),
                 "section": section_title,
                 "chunk_index": len(chunks),
+                "start_line": start_line,
+                "end_line": end_line,
             }
             
             # 构建路径前缀，用于增强 embedding 语义
@@ -54,8 +58,8 @@ class MarkdownChunker:
             
             # If section is too large, sub-chunk it
             if len(section_content) > self.chunk_size:
-                sub_chunks = self._sliding_window(section_content, self.chunk_size, self.chunk_overlap)
-                for i, sub in enumerate(sub_chunks):
+                sub_chunks = self._sliding_window_with_lines(section_content, self.chunk_size, self.chunk_overlap, start_line)
+                for i, (sub, sub_start, sub_end) in enumerate(sub_chunks):
                     # 每个子分片都添加标题和路径前缀，增强 embedding 语义
                     content = f"{path_prefix}\n{section_title}\n{sub}"
                     chunks.append({
@@ -64,7 +68,9 @@ class MarkdownChunker:
                             **metadata,
                             "chunk_index": len(chunks),
                             "is_subchunk": True,
-                            "subchunk_index": i
+                            "subchunk_index": i,
+                            "start_line": sub_start,
+                            "end_line": sub_end,
                         }
                     })
             else:
@@ -372,58 +378,129 @@ class MarkdownChunker:
         
         return sections
 
-    def _split_by_headers_and_codeblocks(self, md: str) -> List[Dict[str, str]]:
+    def _split_by_headers_with_lines(self, md: str, lines: List[str]) -> List[Dict[str, any]]:
         """
-        按标题和代码块切分文档。
+        按标题切分文档，并记录每个 section 的起止行号。
+        """
+        # Regex to match headers (h1-h3, skip h4 to avoid over-splitting)
+        header_pattern = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
+        
+        matches = list(header_pattern.finditer(md))
+        if not matches:
+            # 没有标题，整个文档作为一个 section
+            return [{"title": "Root", "content": md, "start_line": 0, "end_line": len(lines) - 1}]
+            
+        sections = []
+        last_pos = 0
+        current_title = "Root"
+        current_line = 0
+        
+        for match in matches:
+            # Content before this header belongs to the previous header
+            content = md[last_pos:match.start()].strip()
+            if content:
+                content_lines = content.count('\n')
+                sections.append({
+                    "title": current_title,
+                    "content": content,
+                    "start_line": current_line,
+                    "end_line": current_line + content_lines
+                })
+                current_line += content_lines
+            
+            current_title = match.group(0).strip()
+            last_pos = match.end()
+            # 标题本身占一行
+            current_line += 1
+            
+        # Add the last section
+        final_content = md[last_pos:].strip()
+        if final_content:
+            final_lines = final_content.count('\n')
+            sections.append({
+                "title": current_title,
+                "content": final_content,
+                "start_line": current_line,
+                "end_line": current_line + final_lines
+            })
+        
+        return sections
+
+    def _split_by_headers_and_codeblocks(self, md: str) -> List[Dict[str, any]]:
+        """
+        按标题和代码块切分文档，并记录行号信息。
         
         策略：
         1. 先按标题切分
         2. 在每个标题区域内，把代码块单独提取成独立 section
+        3. 记录每个 section 在原文中的起止行号
         """
-        # 先按标题切分
-        header_sections = self._split_by_headers(md)
+        lines = md.split('\n')
+        
+        # 先按标题切分（带行号）
+        header_sections = self._split_by_headers_with_lines(md, lines)
         
         final_sections = []
         for section in header_sections:
             title = section['title']
             content = section['content']
+            section_start_line = section.get('start_line', 0)
             
             # 在内容中查找代码块
             code_pattern = re.compile(r'```[\s\S]*?```', re.MULTILINE)
             matches = list(code_pattern.finditer(content))
             
             if not matches:
-                # 没有代码块，直接保留
-                final_sections.append(section)
+                # 没有代码块，直接保留，计算行号
+                end_line = section_start_line + content.count('\n')
+                final_sections.append({
+                    "title": title,
+                    "content": content,
+                    "start_line": section_start_line,
+                    "end_line": end_line
+                })
                 continue
             
-            # 有代码块，需要拆分
+            # 有代码块，需要拆分并追踪行号
             last_end = 0
+            current_line = section_start_line
+            
             for match in matches:
                 # 代码块前的文本
                 before_text = content[last_end:match.start()].strip()
                 if before_text:
+                    before_lines = before_text.count('\n')
                     final_sections.append({
                         "title": title,
-                        "content": before_text
+                        "content": before_text,
+                        "start_line": current_line,
+                        "end_line": current_line + before_lines
                     })
+                    current_line += before_lines
                 
                 # 代码块单独成 section
                 code_block = match.group(0).strip()
                 if code_block:
+                    code_lines = code_block.count('\n')
                     final_sections.append({
-                        "title": title,  # 代码块也保留标题
-                        "content": code_block
+                        "title": title,
+                        "content": code_block,
+                        "start_line": current_line,
+                        "end_line": current_line + code_lines
                     })
+                    current_line += code_lines
                 
                 last_end = match.end()
             
             # 最后一个代码块后的文本
             after_text = content[last_end:].strip()
             if after_text:
+                after_lines = after_text.count('\n')
                 final_sections.append({
                     "title": title,
-                    "content": after_text
+                    "content": after_text,
+                    "start_line": current_line,
+                    "end_line": current_line + after_lines
                 })
         
         return final_sections
@@ -441,6 +518,44 @@ class MarkdownChunker:
         
         # 有代码块，需要智能切分
         return self._smart_split_with_code_blocks(text, size, overlap)
+
+    def _sliding_window_with_lines(self, text: str, size: int, overlap: int, start_line: int) -> List[tuple]:
+        """
+        滑动窗口切分，同时追踪行号范围。
+        
+        Returns:
+            List of (chunk_text, start_line, end_line)
+        """
+        if not text:
+            return []
+        
+        chunks = []
+        text_start = 0
+        current_line = start_line
+        
+        while text_start < len(text):
+            text_end = text_start + size
+            chunk = text[text_start:text_end]
+            
+            # 计算这个 chunk 的行号范围
+            chunk_lines = chunk.count('\n')
+            chunk_start_line = current_line
+            chunk_end_line = current_line + chunk_lines
+            
+            chunks.append((chunk, chunk_start_line, chunk_end_line))
+            
+            # 移动到下一个位置（考虑 overlap）
+            if text_end >= len(text):
+                break
+                
+            # 计算 overlap 对应的行数
+            overlap_text = text[text_end - overlap:text_end] if overlap > 0 else ""
+            overlap_lines = overlap_text.count('\n')
+            
+            text_start += size - overlap
+            current_line += chunk_lines - overlap_lines
+        
+        return chunks
     
     def _simple_sliding_window(self, text: str, size: int, overlap: int) -> List[str]:
         """简单的滑动窗口切分，添加最小长度过滤"""
