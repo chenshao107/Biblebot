@@ -91,20 +91,24 @@ def is_already_processed(rel_path: str) -> bool:
 def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, storage, pbar=None):
     """处理单个文件，返回 (是否成功, 生成的chunks数量)"""
     try:
-        # 获取相对路径作为 doc_id
-        rel_path = get_relative_path(file_path, raw_dir)
-        path_info = extract_category_from_path(rel_path)
+        # 获取相对路径作为 doc_id（基于原始文件）
+        raw_rel_path = get_relative_path(file_path, raw_dir)
+        path_info = extract_category_from_path(raw_rel_path)
+        
+        # 构建 canonical_md 中的路径（.md 文件）
+        # 将原始扩展名替换为 .md
+        canonical_rel_path = str(Path(raw_rel_path).with_suffix('.md'))
         
         if pbar:
-            pbar.set_postfix(file=rel_path[:40] + "..." if len(rel_path) > 40 else rel_path)
+            pbar.set_postfix(file=canonical_rel_path[:40] + "..." if len(canonical_rel_path) > 40 else canonical_rel_path)
         
         # 1. Convert
         md_content = converter.convert(file_path)
-        converter.save_canonical(md_content, rel_path)
+        converter.save_canonical(md_content, raw_rel_path)
         
-        # 2. Chunk - 传递完整的分类信息
-        chunks = chunker.chunk(md_content, rel_path, path_info)
-        chunker.save_chunks(chunks, rel_path)
+        # 2. Chunk - 使用 canonical 路径（.md），不让 AI 知道原始文件类型
+        chunks = chunker.chunk(md_content, canonical_rel_path, path_info)
+        chunker.save_chunks(chunks, canonical_rel_path)
         
         # 3. Embed & Prepare Points
         chunks_count = len(chunks)
@@ -148,8 +152,8 @@ def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, s
                 }
             ))
         
-        # 4. Save Embedding Metadata
-        embedder.save_embedding_metadata(rel_path, embedding_metadata)
+        # 4. Save Embedding Metadata（使用 canonical 路径）
+        embedder.save_embedding_metadata(canonical_rel_path, embedding_metadata)
         
         # 5. Upsert
         storage.upsert_chunks(points)

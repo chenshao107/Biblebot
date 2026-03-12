@@ -130,11 +130,11 @@ class Agent:
         
         # 自动获取知识库结构
         try:
-            data_dir = settings.DATA_RAW_DIR
+            data_dir = settings.DATA_CANONICAL_DIR
             if not os.path.exists(data_dir):
                 return ""
             
-            # 使用 tree -L 2 获取两层目录结构
+            # 使用 tree -L 2 获取两层目录结构（基于 Docling 转换后的 Markdown）
             result = subprocess.run(
                 ["tree", "-L", "2", data_dir],
                 capture_output=True,

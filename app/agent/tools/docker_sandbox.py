@@ -37,7 +37,7 @@ class DockerSandbox:
     Docker 沙箱管理器
     
     为 Agent 工具提供隔离的执行环境：
-    - 只读映射知识库 (data/raw)
+    - 只读映射知识库 (data/canonical_md，Docling 转换后的 Markdown)
     - 可写工作目录 (data/work/<session_id>)
     - 完整的 Bash 和 Python 环境
     - 资源限制（CPU、内存）
@@ -47,7 +47,7 @@ class DockerSandbox:
     DEFAULT_IMAGE = "biblebot-sandbox:latest"
     
     # 容器内路径
-    CONTAINER_RAW_PATH = "/workspace/data/raw"
+    CONTAINER_RAW_PATH = "/workspace/data/canonical_md"
     CONTAINER_WORK_PATH = "/workspace/work"
     CONTAINER_TEMP_PATH = "/workspace/temp"
     
@@ -67,7 +67,7 @@ class DockerSandbox:
         Args:
             session_id: 会话 ID，用于隔离不同 Agent 实例
             image: Docker 镜像名，默认 biblebot-sandbox:latest
-            raw_dir: 知识库目录（宿主机路径），默认 data/raw
+            raw_dir: 知识库目录（宿主机路径），默认 data/canonical_md（Docling 转换后的 Markdown）
             work_dir: 工作目录（宿主机路径），默认 data/work/<session_id>
             memory_limit: 内存限制，默认 512m
             cpu_quota: CPU 限制，默认 100000 (1核)
@@ -86,7 +86,7 @@ class DockerSandbox:
         
         # 设置目录路径
         base_dir = Path.cwd()
-        self.host_raw_dir = Path(raw_dir) if raw_dir else base_dir / "data" / "raw"
+        self.host_raw_dir = Path(raw_dir) if raw_dir else base_dir / "data" / "canonical_md"
         self.host_work_dir = Path(work_dir) if work_dir else base_dir / "data" / "work" / self.session_id
         
         # 确保目录存在

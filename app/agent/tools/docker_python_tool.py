@@ -44,7 +44,7 @@ class DockerPythonTool(BaseTool):
         # 获取或创建沙箱实例
         self.sandbox = get_sandbox(
             session_id=session_id,
-            raw_dir=settings.DATA_RAW_DIR,
+            raw_dir=settings.DATA_CANONICAL_DIR,
             memory_limit=self.memory_limit,
             cpu_quota=self.cpu_quota,
             timeout=self.timeout
@@ -61,7 +61,7 @@ class DockerPythonTool(BaseTool):
         return """在隔离的 Docker 环境中执行 Python 代码。
 
 工作目录结构:
-- /workspace/data/raw - 知识库（只读）
+- /workspace/data/canonical_md - 知识库（只读，Docling 转换后的 Markdown）
 - /workspace/work - 工作目录（可读写）
 - /workspace/temp - 临时目录（可读写）
 
@@ -80,18 +80,18 @@ class DockerPythonTool(BaseTool):
 
 示例:
 - 读取文件:
-  with open('/workspace/data/raw/RK3506/README.md') as f:
+  with open('/workspace/data/canonical_md/RK3506/README.md') as f:
       content = f.read()
   print(content)
 
 - 数据分析:
   import pandas as pd
-  df = pd.read_csv('/workspace/data/raw/data.csv')
+  df = pd.read_csv('/workspace/data/canonical_md/data.csv')
   print(df.describe())
 
 - 文件处理:
   import json
-  with open('/workspace/data/raw/config.json') as f:
+  with open('/workspace/data/canonical_md/config.json') as f:
       config = json.load(f)
   print(config['version'])
 

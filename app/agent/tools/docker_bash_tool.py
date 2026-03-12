@@ -43,7 +43,7 @@ class DockerBashTool(BaseTool):
         # 获取或创建沙箱实例
         self.sandbox = get_sandbox(
             session_id=session_id,
-            raw_dir=settings.DATA_RAW_DIR,
+            raw_dir=settings.DATA_CANONICAL_DIR,
             memory_limit=self.memory_limit,
             cpu_quota=self.cpu_quota,
             timeout=self.timeout
@@ -60,7 +60,7 @@ class DockerBashTool(BaseTool):
         return """在隔离的 Docker 环境中执行 Bash 命令。
 
 工作目录结构:
-- /workspace/data/raw - 知识库（只读）
+- /workspace/data/canonical_md - 知识库（只读，Docling 转换后的 Markdown）
 - /workspace/work - 工作目录（可读写）
 - /workspace/temp - 临时目录（可读写）
 
@@ -74,9 +74,9 @@ class DockerBashTool(BaseTool):
 - 以及任何可以通过 apt 安装的工具
 
 示例:
-- 列出知识库: ls -la /workspace/data/raw/
-- 搜索文件: find /workspace/data/raw -name "*.pdf"
-- 文本搜索: rg "关键词" /workspace/data/raw/
+- 列出知识库: ls -la /workspace/data/canonical_md/
+- 搜索文件: find /workspace/data/canonical_md -name "*.md"
+- 文本搜索: rg "关键词" /workspace/data/canonical_md/
 - 统计分析: cat file.txt | wc -l
 - 复杂处理: ls -la | grep ".md" | sort
 
