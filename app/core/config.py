@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     # 线程池配置（用于并发请求处理）
     THREAD_POOL_MAX_WORKERS: int = 32  # 线程池最大工作线程数，建议设置为预期并发数的 1-2 倍
     
+    # 网络搜索工具配置
+    TAVILY_API_KEY: Optional[str] = None  # Tavily 搜索 API 密钥
+    SERPER_API_KEY: Optional[str] = None  # Serper 搜索 API 密钥
+    
     # MCP 服务器配置（JSON 格式）
     # 示例: {"filesystem": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/data"]}, "fetch": {"command": "uvx", "args": ["mcp-server-fetch"]}}
     MCP_SERVERS_CONFIG: Optional[str] = None  # MCP 服务器配置 JSON 字符串
