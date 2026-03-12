@@ -46,16 +46,21 @@ class RAGTool(BaseTool):
                     "type": "integer",
                     "description": "返回结果数量，默认 5",
                     "default": 5
+                },
+                "category_filter": {
+                    "type": "string",
+                    "description": "按文件夹路径过滤，只搜索指定目录下的内容。'category'对应第一级文件夹名。示例：'RK3506'表示只搜RK3506文件夹下的文档；'RK3506/uboot'表示只搜RK3506/uboot子目录。当问题明确涉及特定分类时使用。",
+                    "default": None
                 }
             },
             "required": ["query"]
         }
     
-    def execute(self, query: str, top_k: int = 5) -> ToolResult:
+    def execute(self, query: str, top_k: int = 5, category_filter: str = None) -> ToolResult:
         """执行 RAG 检索"""
         try:
-            logger.info(f"RAG 检索: {query}, top_k={top_k}")
-            results = self.rag_engine.search(query, top_k=top_k)
+            logger.info(f"RAG 检索: {query}, top_k={top_k}, category_filter={category_filter}")
+            results = self.rag_engine.search(query, top_k=top_k, category_filter=category_filter)
             
             if not results:
                 return ToolResult(

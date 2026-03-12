@@ -15,7 +15,7 @@ class RAGEngine:
         # Initialize storage collection on startup
         self.storage.init_collection(dense_dim=self.embedder.get_dim())
 
-    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int = 5, category_filter: str = None) -> List[Dict[str, Any]]:
         """
         Complete RAG retrieval pipeline:
         1. Query Rewriting (Expansion)
@@ -26,11 +26,22 @@ class RAGEngine:
         Args:
             query: 查询字符串
             top_k: 返回结果数量
+            category_filter: 可选的类别过滤，如 "RK3506" 或 "RK3506/uboot"
         """
-        logger.info(f"Starting RAG search for: {query} (top_k={top_k})")
+        logger.info(f"Starting RAG search for: {query} (top_k={top_k}, category_filter={category_filter})")
         
         # 1. Expand query
         expanded_queries = self.rewriter.rewrite(query)
+        
+        # Build filter conditions if category_filter provided
+        filter_conditions = None
+        if category_filter:
+            if "/" in category_filter:
+                # 路径前缀匹配，如 "RK3506/uboot"
+                filter_conditions = {"full_path": {"like": category_filter}}
+            else:
+                # 类别精确匹配，如 "RK3506"
+                filter_conditions = {"category": category_filter}
         
         all_hits = []
         # 2 & 3. For each variation, do hybrid search
@@ -41,7 +52,7 @@ class RAGEngine:
             dense_vec = self.embedder.embed_dense(q)
             sparse_vec = self.embedder.embed_sparse(q)
             
-            hits = self.storage.search_hybrid(dense_vec, sparse_vec, limit=search_limit)
+            hits = self.storage.search_hybrid(dense_vec, sparse_vec, limit=search_limit, filter_conditions=filter_conditions)
             # Convert Qdrant objects to dict for consistency
             all_hits.extend([
                 {

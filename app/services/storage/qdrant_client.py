@@ -67,16 +67,47 @@ class QdrantStorage:
             logger.error(f"Error during upsert: {e}")
             raise e
 
-    def search_hybrid(self, dense_vector: list, sparse_vector: dict, limit: int = 10):
+    def search_hybrid(self, dense_vector: list, sparse_vector: dict, limit: int = 10, filter_conditions: dict = None):
         """
         Performs a hybrid search combining dense and sparse results.
+        
+        Args:
+            dense_vector: Dense embedding vector
+            sparse_vector: Sparse embedding vector with "indices" and "values"
+            limit: Maximum number of results
+            filter_conditions: Optional filter dict, e.g., {"category": "RK3506"} or {"full_path": {"like": "RK3506%"}}
         """
         try:
+            # Build filter if conditions provided
+            query_filter = None
+            if filter_conditions:
+                must_conditions = []
+                for key, value in filter_conditions.items():
+                    if isinstance(value, dict) and "like" in value:
+                        # 模糊匹配，用于路径前缀匹配
+                        must_conditions.append(
+                            models.FieldCondition(
+                                key=f"payload.{key}",
+                                match=models.MatchText(text=value["like"])
+                            )
+                        )
+                    else:
+                        # 精确匹配
+                        must_conditions.append(
+                            models.FieldCondition(
+                                key=f"payload.{key}",
+                                match=models.MatchValue(value=value)
+                            )
+                        )
+                query_filter = models.Filter(must=must_conditions)
+                logger.info(f"Applying filter: {filter_conditions}")
+            
             prefetch = [
                 models.Prefetch(
                     query=dense_vector,
                     using="dense",
                     limit=limit * 2,
+                    filter=query_filter,
                 ),
                 models.Prefetch(
                     query=models.SparseVector(
@@ -85,6 +116,7 @@ class QdrantStorage:
                     ),
                     using="sparse",
                     limit=limit * 2,
+                    filter=query_filter,
                 ),
             ]
             
