@@ -87,7 +87,7 @@ class QdrantStorage:
                         # 模糊匹配，用于路径前缀匹配
                         must_conditions.append(
                             models.FieldCondition(
-                                key=f"payload.{key}",
+                                key=key,
                                 match=models.MatchText(text=value["like"])
                             )
                         )
@@ -95,7 +95,7 @@ class QdrantStorage:
                         # 精确匹配
                         must_conditions.append(
                             models.FieldCondition(
-                                key=f"payload.{key}",
+                                key=key,
                                 match=models.MatchValue(value=value)
                             )
                         )
