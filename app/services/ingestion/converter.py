@@ -25,30 +25,41 @@ class DoclingConverter:
     # Docling 不支持的格式，直接读取为纯文本
     PLAIN_TEXT_SUFFIXES = {".txt", ".text", ".log", ".ini", ".cfg", ".conf", ".yaml", ".yml", ".toml", ".sh", ".bat"}
 
+    def _read_as_plain_text(self, input_path: Path) -> str:
+        """
+        将文件作为纯文本读取，并包装为 markdown 格式。
+        """
+        logger.info(f"Reading as plain text: {input_path.name}")
+        try:
+            with open(input_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            # 包裹成 markdown 代码块，保留原始格式
+            return f"# {Path(input_path).stem}\n\n```\n{content}\n```\n"
+        except Exception as e:
+            logger.error(f"Error reading plain text file {input_path}: {e}")
+            raise e
+
     def convert(self, input_path: Path) -> str:
         """
         Converts a document to Markdown string.
-        对于 Docling 不支持的格式（如 .txt），直接读取文件内容。
+        优先尝试使用 Docling 转换，如果失败则降级为纯文本读取。
         """
         suffix = Path(input_path).suffix.lower()
+        
+        # 1. 对于已知的纯文本格式，直接读取（优化性能）
         if suffix in self.PLAIN_TEXT_SUFFIXES:
-            logger.info(f"Reading plain text file {input_path.name} directly (not supported by Docling)...")
-            try:
-                with open(input_path, "r", encoding="utf-8", errors="replace") as f:
-                    content = f.read()
-                # 包裹成 markdown 代码块，保留原始格式
-                return f"# {Path(input_path).stem}\n\n```\n{content}\n```\n"
-            except Exception as e:
-                logger.error(f"Error reading plain text file {input_path}: {e}")
-                raise e
+            return self._read_as_plain_text(input_path)
+        
+        # 2. 尝试用 Docling 转换
         try:
             logger.info(f"Converting {input_path.name} to Markdown...")
             result = self.converter.convert(str(input_path))
             md_content = result.document.export_to_markdown()
             return md_content
         except Exception as e:
-            logger.error(f"Error converting {input_path}: {e}")
-            raise e
+            # Docling 转换失败，尝试作为纯文本读取
+            logger.warning(f"Docling failed to convert {input_path.name}: {e}. Falling back to plain text...")
+            return self._read_as_plain_text(input_path)
 
     def save_canonical(self, content: str, original_name: str):
         """
