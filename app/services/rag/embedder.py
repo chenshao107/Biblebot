@@ -1,6 +1,6 @@
 import requests
 from sentence_transformers import SentenceTransformer
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import numpy as np
 from loguru import logger
 from app.core.config import settings
@@ -9,6 +9,14 @@ import json
 import time
 from pathlib import Path
 from collections import Counter
+
+# 尝试导入 tqdm
+try:
+    from tqdm import tqdm
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
+    tqdm = None
 
 class HybridEmbedder:
     def __init__(self):
@@ -41,17 +49,31 @@ class HybridEmbedder:
         embedding = self.dense_model.encode(text)
         return embedding.tolist()
     
-    def embed_dense_batch(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
+    def embed_dense_batch(self, texts: List[str], batch_size: int = 32, show_progress: bool = True, desc: str = "Embedding") -> List[List[float]]:
         """
         批量生成dense向量，提升效率
         batch_size: 每批处理的文本数量
+        show_progress: 是否显示进度条
+        desc: 进度条描述
         """
         if self.use_api:
-            return self._embed_dense_api_batch(texts, batch_size)
+            return self._embed_dense_api_batch(texts, batch_size, show_progress, desc)
         
-        # 本地模型批量处理
-        embeddings = self.dense_model.encode(texts)
-        return [emb.tolist() for emb in embeddings]
+        # 本地模型批量处理，带进度条
+        if show_progress and HAS_TQDM and len(texts) > 1:
+            all_embeddings = []
+            total_batches = (len(texts) + batch_size - 1) // batch_size
+            # position=1 让嵌入进度条显示在文件进度条上方
+            for i in tqdm(range(0, len(texts), batch_size), desc=f"  🔤 {desc}", unit="batch", 
+                         total=total_batches, position=1, leave=False, ncols=90):
+                batch = texts[i:i + batch_size]
+                batch_embeddings = self.dense_model.encode(batch)
+                all_embeddings.extend([emb.tolist() for emb in batch_embeddings])
+            return all_embeddings
+        else:
+            # 无进度条或数据量小，直接处理
+            embeddings = self.dense_model.encode(texts)
+            return [emb.tolist() for emb in embeddings]
 
     def _embed_dense_api(self, text: str) -> List[float]:
         """Calls Cloud API for dense embedding with retry mechanism."""
@@ -120,7 +142,7 @@ class HybridEmbedder:
                     logger.error(f"Embedding API调用失败，已达最大重试次数: {e}")
                     raise e
     
-    def _embed_dense_api_batch(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
+    def _embed_dense_api_batch(self, texts: List[str], batch_size: int = 32, show_progress: bool = True, desc: str = "API Embedding") -> List[List[float]]:
         """
         批量调用API进行embedding
         将大量文本分批处理，减少API调用次数
@@ -128,11 +150,18 @@ class HybridEmbedder:
         all_embeddings = []
         total_batches = (len(texts) + batch_size - 1) // batch_size
         
-        for i in range(0, len(texts), batch_size):
+        # 创建进度条迭代器
+        if show_progress and HAS_TQDM:
+            batch_iterator = tqdm(range(0, len(texts), batch_size), desc=desc, total=total_batches, unit="batch")
+        else:
+            batch_iterator = range(0, len(texts), batch_size)
+        
+        for i in batch_iterator:
             batch = texts[i:i + batch_size]
             batch_num = i // batch_size + 1
             
-            logger.info(f"处理批次 {batch_num}/{total_batches}，包含 {len(batch)} 个文本")
+            if not show_progress or not HAS_TQDM:
+                logger.info(f"处理批次 {batch_num}/{total_batches}，包含 {len(batch)} 个文本")
             
             max_retries = 3
             retry_delay = 2

@@ -12,6 +12,39 @@ from app.services.rag.embedder import HybridEmbedder
 from app.services.storage.qdrant_client import QdrantStorage
 from qdrant_client.http import models
 
+# 尝试导入 tqdm，如果没有则提供一个简单的替代
+try:
+    from tqdm import tqdm
+except ImportError:
+    class tqdm:
+        def __init__(self, iterable=None, total=None, desc=None, **kwargs):
+            self.iterable = iterable
+            self.total = total
+            self.desc = desc
+            self.n = 0
+            if desc:
+                logger.info(f"{desc} (tqdm not installed)")
+        
+        def __iter__(self):
+            for item in self.iterable:
+                yield item
+                self.n += 1
+        
+        def __enter__(self):
+            return self
+        
+        def __exit__(self, *args):
+            pass
+        
+        def update(self, n=1):
+            self.n += n
+        
+        def set_postfix(self, **kwargs):
+            pass
+        
+        def close(self):
+            pass
+
 def get_relative_path(file_path: Path, base_dir: Path) -> str:
     """获取相对于 base_dir 的路径"""
     try:
@@ -46,33 +79,36 @@ def extract_category_from_path(rel_path: str) -> dict:
             "full_path": rel_path
         }
 
-def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, storage):
-    """处理单个文件"""
+def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, storage, pbar=None):
+    """处理单个文件，返回 (是否成功, 生成的chunks数量)"""
     try:
         # 获取相对路径作为 doc_id
         rel_path = get_relative_path(file_path, raw_dir)
         path_info = extract_category_from_path(rel_path)
         
-        logger.info(f"Processing: {rel_path} (category: {path_info['category']})")
+        if pbar:
+            pbar.set_postfix(file=rel_path[:40] + "..." if len(rel_path) > 40 else rel_path)
         
         # 1. Convert
         md_content = converter.convert(file_path)
-        converter.save_canonical(md_content, rel_path)  # 使用相对路径保存
+        converter.save_canonical(md_content, rel_path)
         
         # 2. Chunk - 传递完整的分类信息
         chunks = chunker.chunk(md_content, rel_path, path_info)
         chunker.save_chunks(chunks, rel_path)
         
-        # 3. Embed & Prepare Points (使用批量embedding加速)
+        # 3. Embed & Prepare Points
         points = []
         embedding_metadata = []
-        
-        # 提取所有chunk的文本内容
         chunk_contents = [chunk["content"] for chunk in chunks]
         
-        # 批量获取dense embedding
-        logger.info(f"Generating embeddings for {len(chunks)} chunks using batch API...")
-        dense_vectors = embedder.embed_dense_batch(chunk_contents, batch_size=32)
+        # 批量获取dense embedding（带进度条）
+        dense_vectors = embedder.embed_dense_batch(
+            chunk_contents, 
+            batch_size=32,
+            show_progress=True,
+            desc=f"Embedding ({len(chunks)} chunks)"
+        )
         
         # 处理每个chunk
         for i, (chunk, dense_vec) in enumerate(zip(chunks, dense_vectors)):
@@ -107,10 +143,12 @@ def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, s
         
         # 5. Upsert
         storage.upsert_chunks(points)
-        logger.info(f"Successfully ingested {rel_path}")
+        
+        return True, len(chunks)
         
     except Exception as e:
         logger.error(f"Failed to process {file_path}: {e}")
+        return False, 0
 
 def main():
     converter = DoclingConverter()
@@ -136,9 +174,36 @@ def main():
         return
 
     logger.info(f"Found {len(doc_files)} files to process")
-
-    for file_path in doc_files:
-        process_file(file_path, raw_dir, converter, chunker, embedder, storage)
+    
+    # 统计
+    success_count = 0
+    failed_count = 0
+    total_chunks = 0
+    
+    # 使用进度条处理文件（position=0 确保在最底部显示）
+    with tqdm(total=len(doc_files), desc="📁 Files", unit="file", position=0, leave=True, ncols=100) as pbar:
+        for file_path in doc_files:
+            success, chunks_count = process_file(file_path, raw_dir, converter, chunker, embedder, storage, pbar)
+            
+            if success:
+                success_count += 1
+                total_chunks += chunks_count
+            else:
+                failed_count += 1
+            
+            pbar.update(1)
+            pbar.set_postfix_str(
+                f"✓{success_count} ✗{failed_count} chunks={total_chunks}"
+            )
+    
+    # 最终统计
+    logger.info("=" * 60)
+    logger.info(f"Processing complete!")
+    logger.info(f"  Total files: {len(doc_files)}")
+    logger.info(f"  Successful:  {success_count}")
+    logger.info(f"  Failed:      {failed_count}")
+    logger.info(f"  Total chunks: {total_chunks}")
+    logger.info("=" * 60)
 
 if __name__ == "__main__":
     main()
