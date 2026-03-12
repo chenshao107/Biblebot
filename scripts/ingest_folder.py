@@ -1,5 +1,6 @@
 import os
 import sys
+import gc
 from pathlib import Path
 from loguru import logger
 
@@ -79,6 +80,14 @@ def extract_category_from_path(rel_path: str) -> dict:
             "full_path": rel_path
         }
 
+def is_already_processed(rel_path: str) -> bool:
+    """检查文件是否已经处理过（检查 embeddings 文件是否存在）"""
+    from app.core.config import settings
+    output_dir = Path(settings.DATA_EMBEDDINGS_DIR)
+    output_path = output_dir / f"{Path(rel_path).stem}_embeddings.json"
+    return output_path.exists()
+
+
 def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, storage, pbar=None):
     """处理单个文件，返回 (是否成功, 生成的chunks数量)"""
     try:
@@ -98,6 +107,7 @@ def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, s
         chunker.save_chunks(chunks, rel_path)
         
         # 3. Embed & Prepare Points
+        chunks_count = len(chunks)
         points = []
         embedding_metadata = []
         chunk_contents = [chunk["content"] for chunk in chunks]
@@ -143,11 +153,16 @@ def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, s
         
         # 5. Upsert
         storage.upsert_chunks(points)
-        
-        return True, len(chunks)
+
+        # 6. 释放本次处理的大对象，减少内存积累
+        del md_content, chunks, points, dense_vectors, embedding_metadata, chunk_contents
+        gc.collect()
+
+        return True, chunks_count
         
     except Exception as e:
         logger.error(f"Failed to process {file_path}: {e}")
+        gc.collect()
         return False, 0
 
 def main():
@@ -183,6 +198,17 @@ def main():
     # 使用进度条处理文件（position=0 确保在最底部显示）
     with tqdm(total=len(doc_files), desc="📁 Files", unit="file", position=0, leave=True, ncols=100) as pbar:
         for file_path in doc_files:
+            rel_path = get_relative_path(file_path, raw_dir)
+
+            # 断点续传：跳过已处理文件
+            if is_already_processed(rel_path):
+                success_count += 1
+                pbar.update(1)
+                pbar.set_postfix_str(
+                    f"✓{success_count}(skipped) ✗{failed_count} chunks={total_chunks}"
+                )
+                continue
+
             success, chunks_count = process_file(file_path, raw_dir, converter, chunker, embedder, storage, pbar)
             
             if success:
