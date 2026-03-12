@@ -22,10 +22,25 @@ class DoclingConverter:
             f"ocr_threads={settings.DOCLING_OCR_THREADS}"
         )
 
+    # Docling 不支持的格式，直接读取为纯文本
+    PLAIN_TEXT_SUFFIXES = {".txt", ".text", ".log", ".ini", ".cfg", ".conf", ".yaml", ".yml", ".toml", ".sh", ".bat"}
+
     def convert(self, input_path: Path) -> str:
         """
         Converts a document to Markdown string.
+        对于 Docling 不支持的格式（如 .txt），直接读取文件内容。
         """
+        suffix = Path(input_path).suffix.lower()
+        if suffix in self.PLAIN_TEXT_SUFFIXES:
+            logger.info(f"Reading plain text file {input_path.name} directly (not supported by Docling)...")
+            try:
+                with open(input_path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                # 包裹成 markdown 代码块，保留原始格式
+                return f"# {Path(input_path).stem}\n\n```\n{content}\n```\n"
+            except Exception as e:
+                logger.error(f"Error reading plain text file {input_path}: {e}")
+                raise e
         try:
             logger.info(f"Converting {input_path.name} to Markdown...")
             result = self.converter.convert(str(input_path))
