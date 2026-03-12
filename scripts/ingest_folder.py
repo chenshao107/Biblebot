@@ -9,6 +9,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from app.services.ingestion.converter import DoclingConverter
 from app.services.ingestion.chunker import MarkdownChunker
+from app.services.ingestion.section_indexer import SectionIndexer
 from app.services.rag.embedder import HybridEmbedder
 from app.services.storage.qdrant_client import QdrantStorage
 from qdrant_client.http import models
@@ -88,7 +89,7 @@ def is_already_processed(rel_path: str) -> bool:
     return output_path.exists()
 
 
-def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, storage, pbar=None):
+def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, storage, section_indexer, pbar=None):
     """处理单个文件，返回 (是否成功, 生成的chunks数量)"""
     try:
         # 获取相对路径作为 doc_id（基于原始文件）
@@ -138,7 +139,7 @@ def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, s
             })
             
             points.append(models.PointStruct(
-                id=hash(f"{rel_path}_{i}") & 0xFFFFFFFFFFFFFFFF,
+                id=hash(f"{canonical_rel_path}_{i}") & 0xFFFFFFFFFFFFFFFF,
                 vector={
                     "dense": dense_vec,
                     "sparse": models.SparseVector(
@@ -158,7 +159,10 @@ def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, s
         # 5. Upsert
         storage.upsert_chunks(points)
 
-        # 6. 释放本次处理的大对象，减少内存积累
+        # 6. Build Section Index（构建章节索引）
+        section_indexer.index_file(md_content, canonical_rel_path)
+
+        # 7. 释放本次处理的大对象，减少内存积累
         del md_content, chunks, points, dense_vectors, embedding_metadata, chunk_contents
         gc.collect()
 
@@ -174,6 +178,7 @@ def main():
     chunker = MarkdownChunker()
     embedder = HybridEmbedder()
     storage = QdrantStorage()
+    section_indexer = SectionIndexer()  # 章节索引构建器
 
     # Init collection
     storage.init_collection(dense_dim=embedder.get_dim())
@@ -213,7 +218,7 @@ def main():
                 )
                 continue
 
-            success, chunks_count = process_file(file_path, raw_dir, converter, chunker, embedder, storage, pbar)
+            success, chunks_count = process_file(file_path, raw_dir, converter, chunker, embedder, storage, section_indexer, pbar)
             
             if success:
                 success_count += 1
@@ -226,6 +231,9 @@ def main():
                 f"✓{success_count} ✗{failed_count} chunks={total_chunks}"
             )
     
+    # 7. Save Section Index（保存章节索引）
+    section_indexer.save_index()
+    
     # 最终统计
     logger.info("=" * 60)
     logger.info(f"Processing complete!")
@@ -233,6 +241,7 @@ def main():
     logger.info(f"  Successful:  {success_count}")
     logger.info(f"  Failed:      {failed_count}")
     logger.info(f"  Total chunks: {total_chunks}")
+    logger.info(f"  Section index: data/canonical_md/section_index.json")
     logger.info("=" * 60)
 
 if __name__ == "__main__":

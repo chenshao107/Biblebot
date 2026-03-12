@@ -10,6 +10,7 @@ from app.agent.tools.base import BaseTool, ToolResult
 from app.agent.tools.rag_tool import RAGTool
 from app.agent.tools.web_search_tool import WebSearchTool
 from app.agent.tools.calculator_tool import CalculatorTool
+from app.agent.tools.section_tools import ListSectionsTool, ReadSectionTool
 from app.core.config import settings
 
 # 根据配置选择 Bash 和 Python 工具的实现
@@ -56,6 +57,8 @@ TOOL_REGISTRY: Dict[str, Type[BaseTool]] = {
     "python": PythonTool,
     "web_search": WebSearchTool,
     "calculator": CalculatorTool,
+    "list_sections": ListSectionsTool,
+    "read_section": ReadSectionTool,
 }
 
 
@@ -92,6 +95,8 @@ def get_default_tools() -> List[BaseTool]:
         BashTool(),
         PythonTool(),
         CalculatorTool(),
+        ListSectionsTool(),  # 列出文档章节
+        ReadSectionTool(),   # 读取指定章节
     ]
     
     # WebSearchTool 需要 API key，单独处理
