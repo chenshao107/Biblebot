@@ -50,7 +50,7 @@ class WebSearchTool(BaseTool):
 - 验证事实信息
 - 查找特定网站或资源
 
-返回搜索结果摘要和链接。注意：需要配置 API 密钥才能使用。"""
+返回搜索结果摘要和链接。"""
     
     @property
     def parameters(self) -> Dict[str, Any]:
