@@ -66,7 +66,7 @@ class PythonTool(BaseTool):
     def description(self) -> str:
         return f"""执行 Python 代码进行数据分析或复杂处理。
 
-工作目录: {settings.DATA_RAW_DIR}
+工作目录: {settings.DATA_CANONICAL_DIR} (Docling 转换后的 Markdown 目录)
 
 可用功能：
 - 读取和解析文件（txt, json, csv, xml 等）
@@ -123,8 +123,8 @@ print(data['key'])
             "datetime": datetime,
             "csv": csv,
             "Path": Path,
-            # 工作目录
-            "DATA_DIR": settings.DATA_RAW_DIR,
+            # 工作目录（Docling 转换后的 Markdown 目录）
+            "DATA_DIR": settings.DATA_CANONICAL_DIR,
         })
         
         return globals_dict
@@ -156,7 +156,7 @@ print(data['key'])
             "datetime": datetime,
             "csv": csv,
             "Path": Path,
-            "DATA_DIR": settings.DATA_RAW_DIR,
+            "DATA_DIR": settings.DATA_CANONICAL_DIR,
         }
     
     def execute(self, code: str) -> ToolResult:
@@ -182,7 +182,7 @@ print(data['key'])
             import os
             original_cwd = os.getcwd()
             try:
-                os.chdir(settings.DATA_RAW_DIR)
+                os.chdir(settings.DATA_CANONICAL_DIR)
                 
                 with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
                     exec(code, globals_dict, locals_dict)

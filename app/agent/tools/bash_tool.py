@@ -17,7 +17,7 @@ class BashTool(BaseTool):
         "ls", "cat", "head", "tail", "grep", "rg", "find", "wc",
         "file", "stat", "du", "tree", "less", "more",
         "awk", "sed", "sort", "uniq", "cut", "tr",
-        "pdfgrep", "pdftotext", "pandoc",
+        # 注意：PDF 相关命令已移除，AI 应使用 Docling 转换后的 Markdown 文件
         "echo", "pwd", "basename", "dirname", "realpath",
     }
     
@@ -36,11 +36,12 @@ class BashTool(BaseTool):
         初始化 Bash 工具
         
         Args:
-            data_dir: 限制命令只能在此目录下执行，默认为配置的 DATA_RAW_DIR
+            data_dir: 限制命令只能在此目录下执行，默认为配置的 DATA_CANONICAL_DIR（Docling 转换后的 Markdown 目录）
             timeout: 命令超时时间（秒），默认使用配置值
         """
         from app.core.config import settings
-        self.data_dir = data_dir or settings.BASH_WORK_DIR or settings.DATA_RAW_DIR
+        # 默认使用 canonical_md 目录（Docling 转换后的 Markdown 文件）
+        self.data_dir = data_dir or settings.BASH_WORK_DIR or settings.DATA_CANONICAL_DIR
         self.timeout = timeout or settings.BASH_TOOL_TIMEOUT
     
     @property
@@ -53,7 +54,9 @@ class BashTool(BaseTool):
         
 工作目录: {self.data_dir}
 
-可用命令: ls, cat, head, tail, grep, rg, find, wc, file, stat, tree, awk, sed, sort, uniq, pdfgrep 等
+可用命令: ls, cat, head, tail, grep, rg, find, wc, file, stat, tree, awk, sed, sort, uniq 等
+
+注意：PDF 文件已通过 Docling 转换为 Markdown，请直接阅读 .md 文件
 
 用途：
 - 列出目录内容: ls -la
@@ -61,7 +64,7 @@ class BashTool(BaseTool):
 - 搜索内容: grep -r "关键词" .
 - 使用 ripgrep: rg "pattern" --type md
 - 查找文件: find . -name "*.pdf"
-- PDF 文本搜索: pdfgrep "关键词" file.pdf
+- Markdown 文本搜索: rg "关键词" --type md
 
 注意：只能执行只读命令，不支持修改、删除。"""
     
