@@ -1,11 +1,26 @@
-from docling.document_converter import DocumentConverter
+import os
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
 from pathlib import Path
 from loguru import logger
 from app.core.config import settings
 
 class DoclingConverter:
     def __init__(self):
-        self.converter = DocumentConverter()
+        # 设置 CPU 线程数
+        os.environ["OMP_NUM_THREADS"] = str(settings.DOCLING_OCR_THREADS)
+
+        pipeline_options = PdfPipelineOptions(do_ocr=settings.DOCLING_DO_OCR)
+        self.converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+            }
+        )
+        logger.info(
+            f"DoclingConverter initialized: do_ocr={settings.DOCLING_DO_OCR}, "
+            f"ocr_threads={settings.DOCLING_OCR_THREADS}"
+        )
 
     def convert(self, input_path: Path) -> str:
         """

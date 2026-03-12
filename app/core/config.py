@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     
     # 中间文件保存配置
     SAVE_INTERMEDIATE_FILES: bool = True  # 是否保存中间文件用于调优
+
+    # Docling 文档转换配置
+    DOCLING_DO_OCR: bool = False  # 是否对 PDF 启用 OCR（扫描件设 True，有文字层的 PDF 设 False 更快更准）
+    DOCLING_OCR_THREADS: int = 4  # OCR/推理使用的 CPU 线程数（OMP_NUM_THREADS）
     
     # Agent 配置
     AGENT_MAX_ITERATIONS: int = 10  # Agent 最大迭代次数
