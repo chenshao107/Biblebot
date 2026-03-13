@@ -12,6 +12,7 @@ from app.services.ingestion.chunker import MarkdownChunker
 from app.services.ingestion.section_indexer import SectionIndexer
 from app.services.rag.embedder import HybridEmbedder
 from app.services.storage.qdrant_client import QdrantStorage
+from app.core.config import settings
 from qdrant_client.http import models
 
 # 尝试导入 tqdm，如果没有则提供一个简单的替代
@@ -83,11 +84,9 @@ def extract_category_from_path(rel_path: str) -> dict:
 
 def is_already_processed(rel_path: str) -> bool:
     """检查文件是否已经处理过（检查 embeddings 文件是否存在，或后缀属于二进制跳过名单）"""
-    from app.services.ingestion.converter import DoclingConverter
     suffix = Path(rel_path).suffix.lower()
     if suffix in DoclingConverter.BINARY_SUFFIXES:
         return True  # 二进制文件永远跳过，无需处理
-    from app.core.config import settings
     output_dir = Path(settings.DATA_EMBEDDINGS_DIR)
     output_path = output_dir / f"{Path(rel_path).stem}_embeddings.json"
     return output_path.exists()
@@ -107,13 +106,19 @@ def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, s
         if pbar:
             pbar.set_postfix(file=canonical_rel_path[:40] + "..." if len(canonical_rel_path) > 40 else canonical_rel_path)
         
-        # 1. Convert
-        md_content = converter.convert(file_path)
-        if md_content is None:
-            # 二进制或不支持的格式，跳过该文件
-            logger.info(f"Skipped (binary/unsupported): {raw_rel_path}")
-            return None, 0
-        converter.save_canonical(md_content, raw_rel_path)
+        # 1. Convert（如果 canonical_md 中已存在对应 .md，直接读取，跳过 Docling）
+        canonical_md_path = Path(settings.DATA_CANONICAL_DIR) / Path(canonical_rel_path)
+        if canonical_md_path.exists():
+            logger.info(f"Using pre-converted markdown (skipping Docling): {canonical_rel_path}")
+            with open(canonical_md_path, "r", encoding="utf-8") as f:
+                md_content = f.read()
+        else:
+            md_content = converter.convert(file_path)
+            if md_content is None:
+                # 二进制或不支持的格式，跳过该文件
+                logger.info(f"Skipped (binary/unsupported): {raw_rel_path}")
+                return None, 0
+            converter.save_canonical(md_content, raw_rel_path)
         
         # 2. Chunk - 使用 canonical 路径（.md），不让 AI 知道原始文件类型
         chunks = chunker.chunk(md_content, canonical_rel_path, path_info)
