@@ -25,6 +25,21 @@ class DoclingConverter:
     # Docling 不支持的格式，直接读取为纯文本
     PLAIN_TEXT_SUFFIXES = {".txt", ".text", ".log", ".ini", ".cfg", ".conf", ".yaml", ".yml", ".toml", ".sh", ".bat"}
 
+    # 二进制文件格式，无法提取文本内容，直接跳过
+    BINARY_SUFFIXES = {
+        # 压缩包
+        ".zip", ".gz", ".tar", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".zst",
+        # 可执行/库文件
+        ".exe", ".dll", ".so", ".a", ".o", ".bin", ".elf",
+        # 图片
+        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp", ".tiff", ".svg",
+        # 音视频
+        ".mp3", ".mp4", ".wav", ".avi", ".mkv", ".flv", ".mov",
+        # 其他二进制
+        ".pyc", ".class", ".whl", ".deb", ".rpm", ".dmg", ".iso",
+        ".db", ".sqlite", ".sqlite3",
+    }
+
     def _read_as_plain_text(self, input_path: Path) -> str:
         """
         将文件作为纯文本读取，并包装为 markdown 格式。
@@ -39,25 +54,37 @@ class DoclingConverter:
             logger.error(f"Error reading plain text file {input_path}: {e}")
             raise e
 
-    def convert(self, input_path: Path) -> str:
+    def convert(self, input_path: Path):
         """
         Converts a document to Markdown string.
-        优先尝试使用 Docling 转换，如果失败则降级为纯文本读取。
+        - 二进制文件（zip/exe/图片等）：返回 None，由调用方跳过
+        - 已知纯文本格式：直接读取
+        - 其他格式：尝试 Docling 转换，失败后降级为纯文本读取
         """
         suffix = Path(input_path).suffix.lower()
-        
-        # 1. 对于已知的纯文本格式，直接读取（优化性能）
+
+        # 1. 二进制文件，无法提取有效文本，直接跳过
+        if suffix in self.BINARY_SUFFIXES:
+            logger.warning(f"Skipping binary file (unsupported format): {input_path.name}")
+            return None
+
+        # 2. 对于已知的纯文本格式，直接读取（优化性能）
         if suffix in self.PLAIN_TEXT_SUFFIXES:
             return self._read_as_plain_text(input_path)
         
-        # 2. 尝试用 Docling 转换
+        # 3. 尝试用 Docling 转换
         try:
             logger.info(f"Converting {input_path.name} to Markdown...")
             result = self.converter.convert(str(input_path))
             md_content = result.document.export_to_markdown()
             return md_content
         except Exception as e:
-            # Docling 转换失败，尝试作为纯文本读取
+            # Docling 转换失败，检查是否是格式不支持（二进制乱码无意义）
+            err_str = str(e).lower()
+            if "file format not allowed" in err_str or "not allowed" in err_str:
+                logger.warning(f"Skipping unsupported format file: {input_path.name} ({e})")
+                return None
+            # 其他错误才降级为纯文本
             logger.warning(f"Docling failed to convert {input_path.name}: {e}. Falling back to plain text...")
             return self._read_as_plain_text(input_path)
 

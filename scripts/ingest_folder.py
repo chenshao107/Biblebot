@@ -82,7 +82,11 @@ def extract_category_from_path(rel_path: str) -> dict:
         }
 
 def is_already_processed(rel_path: str) -> bool:
-    """检查文件是否已经处理过（检查 embeddings 文件是否存在）"""
+    """检查文件是否已经处理过（检查 embeddings 文件是否存在，或后缀属于二进制跳过名单）"""
+    from app.services.ingestion.converter import DoclingConverter
+    suffix = Path(rel_path).suffix.lower()
+    if suffix in DoclingConverter.BINARY_SUFFIXES:
+        return True  # 二进制文件永远跳过，无需处理
     from app.core.config import settings
     output_dir = Path(settings.DATA_EMBEDDINGS_DIR)
     output_path = output_dir / f"{Path(rel_path).stem}_embeddings.json"
@@ -105,6 +109,10 @@ def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, s
         
         # 1. Convert
         md_content = converter.convert(file_path)
+        if md_content is None:
+            # 二进制或不支持的格式，跳过该文件
+            logger.info(f"Skipped (binary/unsupported): {raw_rel_path}")
+            return None, 0
         converter.save_canonical(md_content, raw_rel_path)
         
         # 2. Chunk - 使用 canonical 路径（.md），不让 AI 知道原始文件类型
@@ -202,6 +210,7 @@ def main():
     # 统计
     success_count = 0
     failed_count = 0
+    skipped_count = 0
     total_chunks = 0
     
     # 使用进度条处理文件（position=0 确保在最底部显示）
@@ -220,7 +229,9 @@ def main():
 
             success, chunks_count = process_file(file_path, raw_dir, converter, chunker, embedder, storage, section_indexer, pbar)
             
-            if success:
+            if success is None:
+                skipped_count += 1
+            elif success:
                 success_count += 1
                 total_chunks += chunks_count
             else:
@@ -228,7 +239,7 @@ def main():
             
             pbar.update(1)
             pbar.set_postfix_str(
-                f"✓{success_count} ✗{failed_count} chunks={total_chunks}"
+                f"✓{success_count} ◦{skipped_count} ✗{failed_count} chunks={total_chunks}"
             )
     
     # 7. Save Section Index（保存章节索引）
@@ -239,6 +250,7 @@ def main():
     logger.info(f"Processing complete!")
     logger.info(f"  Total files: {len(doc_files)}")
     logger.info(f"  Successful:  {success_count}")
+    logger.info(f"  Skipped:     {skipped_count} (binary/unsupported)")
     logger.info(f"  Failed:      {failed_count}")
     logger.info(f"  Total chunks: {total_chunks}")
     logger.info(f"  Section index: data/canonical_md/section_index.json")
