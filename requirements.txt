@@ -11,7 +11,7 @@ pydantic
 requests
 loguru
 tqdm
-
+httpx[socks]
 # Docker 沙箱支持
 docker
 
