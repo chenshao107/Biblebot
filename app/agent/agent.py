@@ -9,78 +9,8 @@ from typing import List, Dict, Any, Optional, Generator
 from loguru import logger
 from app.agent.llm import LLMClient
 from app.agent.tools.base import BaseTool, ToolResult
+from app.agent.prompt_manager import PromptManager
 from app.core.config import settings
-
-
-def get_system_prompt(knowledge_tree: str = "", tools: List[BaseTool] = None) -> str:
-    """生成系统 Prompt，包含知识库结构信息和可用工具"""
-    tree_info = f"\n知识库结构：\n{knowledge_tree}\n" if knowledge_tree else ""
-    
-    # 构建工具列表描述
-    tools_list = []
-    mcp_tools = []
-    
-    if tools:
-        for tool in tools:
-            tool_desc = f"- **{tool.name}**: {tool.description}"
-            if tool.name.startswith(("filesystem_", "fetch_", "github_", "sqlite_", "git_", 
-                                     "brave_search_", "puppeteer_", "redis_")):
-                mcp_tools.append(tool_desc)
-            else:
-                tools_list.append(tool_desc)
-    else:
-        # 默认工具列表（向后兼容）
-        tools_list = [
-            "- **search_knowledge**: 在知识库中进行语义搜索（RAG检索）",
-            "- **run_bash**: 执行 bash 命令来探索文件（如 ls, cat, head, tail, grep, rg, find 等）",
-            "- **run_python**: 执行 Python 代码进行数据分析或复杂处理",
-            "- **calculator**: 执行数学计算",
-            "- **web_search**: 搜索互联网获取最新信息"
-        ]
-    
-    # 构建工具说明
-    tools_section = "\n".join(tools_list) if tools_list else ""
-    mcp_section = ""
-    if mcp_tools:
-        mcp_section = "\n\n**MCP 扩展工具**（通过 Model Context Protocol 接入的外部工具）:\n" + "\n".join(mcp_tools)
-    
-    return f"""你是一个智能知识助手，类似于Claude Code、Cursor的AI助手，可以通过各种工具来回答用户的问题。
-{tree_info}
-你有以下工具可用，并且可以一次可以调用多个工具：
-{tools_section}{mcp_section}
-
-工作策略：
-- 对于简单的知识查询，优先使用 search_knowledge 快速在现成的RAG知识库中粗略搜索。搜索的目的仅仅是初步定位与问题相关的内容的大致位置（我特地在RAG搜索结果里加入了当前片段出自于哪的信息，请你务必利用。）。为了更准确地获取答案，请通过bash命令或者python命令来查看原文的特定片段。
-- 对于需要探索文件结构、查找具体内容的任务，使用 run_bash
-- 对于需要数据分析、格式转换的任务，使用 run_python
-- 对于需要获取网页内容的任务，可以使用 fetch_* 工具（如果可用）
-- 对于需要文件系统操作的任务，可以使用 filesystem_* 工具（如果可用）
-- 你可以组合使用多个工具来完成复杂任务
-- 每次工具调用后，仔细分析结果，决定是否需要继续探索。当你能确定答案时，请立即给出最终答案。
-
-工具使用建议（强烈建议但不强制）：
-- search_knowledge: 建议最多 2-3 次，除非你认为当前知识库还有未挖掘的信息，或者查询不够、有必要延伸查找某些东西能完善回答
-- run_bash: 建议最多 2-3 次，用于查看已定位的原文片段
-- run_python: 仅在需要数据分析时使用
-- MCP 工具: 根据具体任务需求使用
-
-重要提醒：
-- 如果已经获得足够信息能回答用户问题，请立即停止调用工具，直接给出最终答案
-- 不要为了探索而探索，避免不必要的工具调用
-- 简单问题通常 1-2 次 search_knowledge 就能解决
-
-关于知识库覆盖范围：
-- 当前知识库是有限的，只包含特定领域的技术文档
-- 如果经过 2-3 次搜索仍未找到相关信息，很可能知识库中没有该内容
-- 此时请直接告知用户"根据现有知识库无法找到答案"，而不是无限次尝试搜索
-- 不要假设知识库中一定有答案，也不要因为搜不到而反复用不同关键词尝试
-
-回答规范：
-- 给出最终答案时，请简要标注信息来源（如：根据《Buildroot手册》第4章、或根据140服务器使用文档）
-- 如果使用了多个来源，选择最主要的一两个标注即可
-- 不需要详细引用，只需让用户知道复查方向
-
-请根据用户的问题，自主选择合适的工具，逐步探索并最终给出完整的答案。"""
 
 
 class Agent:
@@ -92,6 +22,7 @@ class Agent:
         self.tools = {tool.name: tool for tool in tools}
         self.max_iterations = max_iterations or settings.AGENT_MAX_ITERATIONS
         self.knowledge_tree = knowledge_tree
+        self.prompt_manager = PromptManager()
         self._stop_event = threading.Event()  # 用于取消当前任务
     
     def stop(self):
@@ -219,7 +150,10 @@ class Agent:
         # 构建初始消息
         knowledge_tree = self._get_knowledge_tree()
         tools_list = list(self.tools.values())
-        system_prompt = get_system_prompt(knowledge_tree, tools_list)
+        system_prompt = self.prompt_manager.build_system_prompt(
+            tools=tools_list,
+            knowledge_tree=knowledge_tree,
+        )
         messages = [
             {"role": "system", "content": system_prompt}
         ]

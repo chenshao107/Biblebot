@@ -37,12 +37,16 @@ RAG_env.txt
 Thumbs.db
 
 # 数据目录（生成的中间文件和向量数据）
-data/canonical_md/
-data/chunks/
-data/embeddings/
+data
+logs
 
 # Docker 数据卷
 docker/qdrant_storage/
+
+# 环境定制 Prompt（各部署环境独立维护，不进 git，避免 merge 冲突）
+prompts_override/*
+# 但模板文件本身进 git，供参考
+!prompts_override/*.example
 
 # 日志
 *.log
