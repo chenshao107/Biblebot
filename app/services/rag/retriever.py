@@ -38,7 +38,8 @@ class RAGEngine:
         if category_filter:
             if "/" in category_filter:
                 # 路径前缀匹配，如 "RK3506/uboot"
-                filter_conditions = {"full_path": {"like": category_filter}}
+                # 使用 canonical_path 进行过滤（AI 操作的是 MD 文件）
+                filter_conditions = {"canonical_path": {"like": category_filter}}
             else:
                 # 类别精确匹配，如 "RK3506"
                 filter_conditions = {"category": category_filter}

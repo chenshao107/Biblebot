@@ -19,7 +19,7 @@ class MarkdownChunker:
         Args:
             md_content: Markdown 内容
             doc_id: 文档 ID（使用相对路径，如 RK3506/uboot/README.md）
-            path_info: 路径信息字典，包含 category, subcategory, full_path
+            path_info: 路径信息字典，包含 category, subcategory, canonical_path, raw_path
         """
         logger.info(f"Chunking document {doc_id}...")
         
@@ -41,11 +41,16 @@ class MarkdownChunker:
             end_line = section.get('end_line', 0)
             
             # 构建元数据
+            # 优先使用 canonical_path（MD路径）作为操作路径，同时保留 raw_path 用于参考文献
+            canonical_path = path_info.get("canonical_path", doc_id)
+            raw_path = path_info.get("raw_path", doc_id)
+            
             metadata = {
                 "doc_id": doc_id,
                 "category": path_info.get("category", "unknown"),
                 "subcategory": path_info.get("subcategory", ""),
-                "full_path": path_info.get("full_path", doc_id),
+                "canonical_path": canonical_path,  # AI 操作使用的 MD 路径
+                "raw_path": raw_path,  # 原始文件路径，用于参考文献
                 "section": section_title,
                 "chunk_index": len(chunks),
                 "start_line": start_line,
@@ -53,8 +58,8 @@ class MarkdownChunker:
             }
             
             # 构建路径前缀，用于增强 embedding 语义
-            # 格式: [RK3506/uboot/README.md] 或 [RK3506/README.md]
-            path_prefix = f"[{path_info.get('full_path', doc_id)}]"
+            # 使用 canonical_path（MD路径），因为 AI 操作的是 MD 文件
+            path_prefix = f"[{canonical_path}]"
             
             # If section is too large, sub-chunk it
             if len(section_content) > self.chunk_size:
@@ -89,20 +94,22 @@ class MarkdownChunker:
         return chunks
     
     def _extract_path_info(self, doc_id: str) -> dict:
-        """从 doc_id (相对路径) 提取路径信息"""
+        """从 doc_id (相对路径) 提取路径信息（fallback 方法）"""
         parts = doc_id.split('/')
         
         if len(parts) == 1:
             return {
                 "category": "root",
                 "subcategory": "",
-                "full_path": doc_id
+                "canonical_path": doc_id,
+                "raw_path": doc_id
             }
         else:
             return {
                 "category": parts[0],
                 "subcategory": '/'.join(parts[1:-1]) if len(parts) > 2 else "",
-                "full_path": doc_id
+                "canonical_path": doc_id,
+                "raw_path": doc_id
             }
 
     def save_chunks(self, chunks: List[Dict[str, Any]], doc_id: str):

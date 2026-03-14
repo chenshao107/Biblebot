@@ -85,19 +85,25 @@ class RAGTool(BaseTool):
                 doc_id = meta.get("doc_id", "未知")
                 category = meta.get("category", "")
                 subcategory = meta.get("subcategory", "")
-                full_path = meta.get("full_path", doc_id)
+                # 优先使用 canonical_path（MD路径）给 AI 操作，同时保留 raw_path 用于参考文献
+                canonical_path = meta.get("canonical_path", doc_id)
+                raw_path = meta.get("raw_path", doc_id)
                 section = meta.get("section", "")
                 start_line = meta.get("start_line", 0)
                 end_line = meta.get("end_line", 0)
                 
                 # 构建来源信息
-                source_info = f"📁 {full_path}"
+                # AI 使用 canonical_path（MD路径）进行操作
+                source_info = f"📁 {canonical_path}"
                 if category and category != "root":
                     source_info += f" | 分类: {category}"
                     if subcategory:
                         source_info += f"/{subcategory}"
                 if section and section != "Root":
                     source_info += f" | 章节: {section}"
+                # 添加原始文件路径作为参考
+                if raw_path and raw_path != canonical_path:
+                    source_info += f"\n   原始文件: {raw_path}"
                 
                 # 添加行号信息（相对于转换后的 Markdown，仅供参考）
                 line_info = f"lines: {start_line}-{end_line} (参考)" if start_line != end_line else f"line: {start_line} (参考)"

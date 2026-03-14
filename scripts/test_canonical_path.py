@@ -86,11 +86,20 @@ def verify_no_pdf_exposure():
             data = json.load(f)
         
         doc_id = data.get('doc_id', '')
-        full_path = data.get('chunks', [{}])[0].get('metadata', {}).get('full_path', '')
+        metadata = data.get('chunks', [{}])[0].get('metadata', {})
+        canonical_path = metadata.get('canonical_path', '')
+        raw_path = metadata.get('raw_path', '')
         
-        if '.pdf' in doc_id.lower() or '.pdf' in full_path.lower():
-            print(f"  ❌ 发现 PDF 路径: {doc_id}")
+        # 检查 doc_id 和 canonical_path 是否为 .md 路径
+        if not doc_id.endswith('.md'):
+            print(f"  ❌ doc_id 不是 .md 路径: {doc_id}")
             pdf_found = True
+        if canonical_path and not canonical_path.endswith('.md'):
+            print(f"  ❌ canonical_path 不是 .md 路径: {canonical_path}")
+            pdf_found = True
+        # 检查 raw_path 是否保留原始路径（可能是 PDF）
+        if not raw_path:
+            print(f"  ⚠️  raw_path 为空，建议保留原始文件路径")
     
     if not pdf_found:
         print("  ✅ 未在 chunk 元数据中发现 PDF 路径")

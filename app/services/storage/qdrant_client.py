@@ -75,7 +75,7 @@ class QdrantStorage:
             dense_vector: Dense embedding vector
             sparse_vector: Sparse embedding vector with "indices" and "values"
             limit: Maximum number of results
-            filter_conditions: Optional filter dict, e.g., {"category": "RK3506"} or {"full_path": {"like": "RK3506%"}}
+            filter_conditions: Optional filter dict, e.g., {"category": "RK3506"} or {"canonical_path": {"like": "RK3506%"}}
         """
         try:
             # Build filter if conditions provided

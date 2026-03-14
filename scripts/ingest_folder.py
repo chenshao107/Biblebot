@@ -55,31 +55,40 @@ def get_relative_path(file_path: Path, base_dir: Path) -> str:
     except ValueError:
         return file_path.name
 
-def extract_category_from_path(rel_path: str) -> dict:
+def extract_category_from_path(rel_path: str, canonical_path: str = None) -> dict:
     """
     从相对路径提取分类信息
-    例如: RK3506/uboot/README.md -> 
+    同时保存 raw_path 和 canonical_path
+    
+    例如: RK3506/uboot/README.pdf -> 
     {
         "category": "RK3506",
         "subcategory": "uboot",
-        "full_path": "RK3506/uboot/README.md"
+        "raw_path": "RK3506/uboot/README.pdf",
+        "canonical_path": "RK3506/uboot/README.md"
     }
     """
     parts = rel_path.split('/')
+    
+    # 如果没有提供 canonical_path，则默认使用 .md 后缀
+    if canonical_path is None:
+        canonical_path = str(Path(rel_path).with_suffix('.md'))
     
     if len(parts) == 1:
         # 根目录下的文件
         return {
             "category": "root",
             "subcategory": "",
-            "full_path": rel_path
+            "raw_path": rel_path,
+            "canonical_path": canonical_path
         }
     else:
         # 子目录中的文件
         return {
             "category": parts[0],
             "subcategory": '/'.join(parts[1:-1]) if len(parts) > 2 else "",
-            "full_path": rel_path
+            "raw_path": rel_path,
+            "canonical_path": canonical_path
         }
 
 def is_already_processed(rel_path: str) -> bool:
@@ -97,11 +106,13 @@ def process_file(file_path: Path, raw_dir: Path, converter, chunker, embedder, s
     try:
         # 获取相对路径作为 doc_id（基于原始文件）
         raw_rel_path = get_relative_path(file_path, raw_dir)
-        path_info = extract_category_from_path(raw_rel_path)
         
         # 构建 canonical_md 中的路径（.md 文件）
         # 将原始扩展名替换为 .md
         canonical_rel_path = str(Path(raw_rel_path).with_suffix('.md'))
+        
+        # 提取路径信息，同时保存 raw_path 和 canonical_path
+        path_info = extract_category_from_path(raw_rel_path, canonical_rel_path)
         
         if pbar:
             pbar.set_postfix(file=canonical_rel_path[:40] + "..." if len(canonical_rel_path) > 40 else canonical_rel_path)
