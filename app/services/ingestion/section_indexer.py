@@ -40,7 +40,7 @@ class SectionIndexer:
                 
                 # 创建新章节
                 level = len(match.group(1))
-                title = match.group(0).strip()  # 包含 # 的完整标题
+                title = match.group(2).strip()  # 纯文本标题（不包含 #）
                 current_section = {
                     'title': title,
                     'level': level,
@@ -142,6 +142,26 @@ class SectionIndexer:
         
         return self.index[file_path]['sections']
     
+    def _normalize_title(self, title: str) -> str:
+        """
+        规范化标题，移除 Markdown 转义字符以便匹配
+        
+        Args:
+            title: 原始标题
+            
+        Returns:
+            规范化后的标题
+        """
+        # 移除常见的 Markdown 转义字符
+        normalized = title.replace('\\_', '_')
+        normalized = normalized.replace('\\*', '*')
+        normalized = normalized.replace('\\[', '[')
+        normalized = normalized.replace('\\]', ']')
+        normalized = normalized.replace('\\(', '(')
+        normalized = normalized.replace('\\)', ')')
+        normalized = normalized.replace('\\`', '`')
+        return normalized
+    
     def get_section_content(self, file_path: str, section_title: str, 
                            md_content: str) -> Optional[Dict[str, Any]]:
         """
@@ -159,10 +179,18 @@ class SectionIndexer:
         if not sections:
             return None
         
-        # 精确匹配或部分匹配
+        # 规范化传入的标题
+        normalized_input_title = self._normalize_title(section_title)
+        
+        # 精确匹配或部分匹配（使用规范化后的标题）
         target_section = None
         for section in sections:
-            if section_title in section['title'] or section['title'] in section_title:
+            normalized_section_title = self._normalize_title(section['title'])
+            # 尝试多种匹配方式
+            if (section_title in section['title'] or 
+                section['title'] in section_title or
+                normalized_input_title in normalized_section_title or
+                normalized_section_title in normalized_input_title):
                 target_section = section
                 break
         
