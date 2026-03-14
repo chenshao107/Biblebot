@@ -180,6 +180,35 @@ class Agent:
                 return
             
             logger.info(f"🤔 Agent 迭代 {iteration + 1}/{self.max_iterations}")
+            
+            # 动态注入迭代预警（方案1）
+            remaining = self.max_iterations - iteration - 1
+            if remaining <= 0:
+                # 最后一次迭代：强制收敛警告
+                warning_msg = (
+                    f"⚠️ 【紧急】这是你的最后一次调用机会（{self.max_iterations}/{self.max_iterations}）。"
+                    f"你必须立即停止所有工具调用，基于已收集的信息给出最终答案。"
+                    f"如果继续调用工具，任务将失败且用户无法获得任何答案。"
+                )
+                messages.append({"role": "system", "content": warning_msg})
+                logger.warning(f"🚨 注入强制收敛警告：最后一次迭代")
+            elif remaining <= 2:
+                # 剩余2次：强烈警告
+                warning_msg = (
+                    f"⏰ 【警告】你仅剩 {remaining} 次调用机会（当前第 {iteration + 1} 次，共 {self.max_iterations} 次）。"
+                    f"请立即停止探索，整合已有信息准备给出最终答案。"
+                    f"不要调用任何新工具，直接回答用户问题。"
+                )
+                messages.append({"role": "system", "content": warning_msg})
+                logger.info(f"⚠️ 注入收敛提醒：剩余 {remaining} 次")
+            elif remaining <= self.max_iterations * 0.3:
+                # 剩余30%：温和提醒
+                warning_msg = (
+                    f"💡 【提醒】你还剩 {remaining} 次调用机会（共 {self.max_iterations} 次）。"
+                    f"珍惜每一次调用机会，多调用点工具，评估是否已收集足够信息，如已足够请开始总结答案。"
+                )
+                messages.append({"role": "system", "content": warning_msg})
+                logger.info(f"💡 注入迭代提醒：剩余 {remaining} 次")
                     
             # 调用 LLM
             response = self.llm.chat(messages, tools=tools_schema)
