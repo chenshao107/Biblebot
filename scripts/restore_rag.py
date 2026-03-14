@@ -107,42 +107,61 @@ def restore_qdrant_snapshot(snapshot_path: str, force: bool = False, dry_run: bo
     logger.info(f"正在上传 snapshot: {snapshot_path}")
     
     try:
-        # 使用 Qdrant 的 recover 接口
-        import requests
+        import time
         
-        # 首先上传 snapshot 文件
-        upload_url = f"http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}/collections/{settings.QDRANT_COLLECTION_NAME}/snapshots/upload"
+        # 使用 Qdrant Python 客户端的 recover_snapshot 方法
+        # 这是最简单可靠的方式
         
-        with open(snapshot_path, 'rb') as f:
-            response = requests.post(
-                upload_url,
-                files={'snapshot': (snapshot_path.name, f, 'application/octet-stream')},
-                timeout=300  # 大文件上传需要较长时间
-            )
-            response.raise_for_status()
+        logger.info("正在恢复 snapshot（使用客户端 API）...")
         
-        logger.info("Snapshot 上传成功，正在恢复...")
-        
-        # 获取上传后的 snapshot 名称
-        snapshot_name = snapshot_path.name
-        
-        # 从 snapshot 恢复 collection
-        recover_url = f"http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}/collections/{settings.QDRANT_COLLECTION_NAME}/snapshots/recover"
-        response = requests.post(
-            recover_url,
-            json={"location": f"/qdrant/snapshots/{settings.QDRANT_COLLECTION_NAME}/{snapshot_name}"},
-            timeout=300
+        # 方法1: 使用 recover_snapshot 方法从本地文件恢复
+        # 这个方法会在服务器上创建 collection 并恢复数据
+        client.recover_snapshot(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            location=str(snapshot_path),
+            wait=True  # 等待恢复完成
         )
-        response.raise_for_status()
+        
+        logger.info("Snapshot 恢复命令已发送，等待完成...")
+        time.sleep(3)  # 给服务器一些时间处理
         
         # 验证恢复结果
-        new_info = get_collection_info()
-        logger.info(f"Qdrant 恢复完成！")
-        logger.info(f"  - 恢复后向量数量: {new_info['points_count']}")
+        max_retries = 10
+        for i in range(max_retries):
+            try:
+                new_info = get_collection_info()
+                if new_info and new_info['points_count'] > 0:
+                    logger.info(f"Qdrant 恢复完成！")
+                    logger.info(f"  - 恢复后向量数量: {new_info['points_count']}")
+                    break
+            except Exception as e:
+                logger.debug(f"等待恢复完成... ({i+1}/{max_retries})")
+                time.sleep(1)
+        else:
+            logger.warning("无法验证恢复结果，请手动检查")
         
     except Exception as e:
         logger.error(f"恢复 Qdrant snapshot 失败: {e}")
-        raise
+        # 尝试备选方法：使用 HTTP API
+        logger.info("尝试使用备选方法恢复...")
+        try:
+            import requests
+            
+            # 备选方法：上传 snapshot 文件并恢复
+            upload_url = f"http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}/collections/{settings.QDRANT_COLLECTION_NAME}/snapshots/upload"
+            
+            with open(snapshot_path, 'rb') as f:
+                response = requests.post(upload_url, files={'snapshot': f}, timeout=300)
+                response.raise_for_status()
+            
+            logger.info("Snapshot 上传成功")
+            logger.warning("请手动在 Qdrant Dashboard 或使用以下命令恢复:")
+            logger.warning(f"  PUT http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}/collections/{settings.QDRANT_COLLECTION_NAME}/snapshots/recover")
+            logger.warning(f"  Body: {{\"location\": \"{snapshot_path.name}\"}}")
+            
+        except Exception as e2:
+            logger.error(f"备选方法也失败: {e2}")
+            raise e
 
 
 def restore_local_files(backup_path: str, dry_run: bool = False):
