@@ -159,13 +159,13 @@ class ReadSectionTool(BaseTool):
             result = indexer.get_section_content(file_path, section_title, md_content)
             
             if not result:
-                # 章节未找到，列出可用章节
+                # 章节未找到，列出所有可用章节
                 sections = indexer.list_sections(file_path)
-                available = "\n".join([f"  - {s['title']}" for s in sections[:10]])
+                available = "\n".join([f"  - {s['title']}" for s in sections])
                 return ToolResult(
                     success=False,
                     output="",
-                    error=f"章节 '{section_title}' 未找到。\n\n可用章节:\n{available}\n\n请使用 list_sections 查看完整列表。"
+                    error=f"章节 '{section_title}' 未找到。\n\n可用章节 ({len(sections)} 个):\n{available}\n\n请从以上列表中选择正确的章节标题重试。"
                 )
             
             # 格式化输出
