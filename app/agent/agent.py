@@ -18,14 +18,12 @@ from app.core.config import settings
 def estimate_tokens(text: str) -> int:
     """
     估算文本的 token 数量
-    中文：1 字 ≈ 1.5 tokens
-    英文：1 词 ≈ 1.3 tokens
-    简化计算：总字符数 / 2
+    简化计算：3 字符 ≈ 1 token
+    这个比例对中英文都比较接近实际情况
     """
     if not text:
         return 0
-    # 简单估算：平均每个字符约 0.5-1.5 tokens，取保守估计
-    return int(len(text) * 0.6)
+    return len(text) // 3
 
 
 def calculate_messages_tokens(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -103,13 +101,21 @@ class Agent:
         # 工具调用目的追踪
         self._tool_call_purposes: Dict[str, str] = {}  # tool_call_id -> purpose
         
-        # Lazy Summarization 阈值配置
-        self.LAZY_SUMMARY_THRESHOLD = 8000  # 超过此阈值触发批量总结
+        # ============================================
+        # Artifact 阈值配置（单位：tokens）
+        # ============================================
+        
+        # Lazy Summarization 触发阈值
+        # 当上下文总 token 数超过此值时，触发批量摘要压缩
+        self.LAZY_SUMMARY_THRESHOLD = 20000  # tokens
         self._summary_triggered = False  # 是否已触发过总结
         
-        # 工具结果处理策略阈值
-        self.RAW_THRESHOLD = 2000  # 小于此值，永远 raw
-        self.ARTIFACT_BACKUP_THRESHOLD = 8000  # 小于此值，raw + artifact 备份
+        # 工具结果处理策略阈值（均以 token 为单位）
+        # 策略1: result_tokens < RAW_THRESHOLD → 直接 raw 进 context
+        # 策略2: RAW_THRESHOLD <= result_tokens < ARTIFACT_THRESHOLD → raw + artifact 备份
+        # 策略3: result_tokens >= ARTIFACT_THRESHOLD → artifact 化，只放引用
+        self.RAW_THRESHOLD = 3000       # tokens, 约 9000 字符
+        self.ARTIFACT_THRESHOLD = 5000  # tokens, 约 15000 字符
     
     def stop(self):
         """停止当前正在运行的 Agent 任务"""
@@ -237,7 +243,7 @@ class Agent:
                         )
                         if summary:
                             artifact.summary = summary
-                            logger.info(f"  ✅ {art_id}: 生成摘要 ({len(artifact.content)} → {len(summary)} 字符)")
+                            logger.info(f"  ✅ {art_id}: 生成摘要 ({estimate_tokens(artifact.content)} → {estimate_tokens(summary)} tokens)")
                     except Exception as e:
                         logger.warning(f"  ⚠️ {art_id} 总结失败: {e}")
                         continue  # 总结失败，跳过
@@ -503,10 +509,7 @@ class Agent:
                 if prev_tokens > 0:
                     growth_rate = ((token_stats['total_tokens'] - prev_tokens) / prev_tokens) * 100
             
-            logger.info(f"📊 第 {iteration + 1} 轮上下文统计:")
-            logger.info(f"   当前上下文: {token_stats['total_tokens']} tokens | 消息数: {token_stats['message_count']}")
-            logger.info(f"   累计消耗: {self._total_tokens_consumed} tokens | 工具结果累计: {self._tool_results_tokens} tokens")
-            logger.info(f"   增长率: {growth_rate:+.1f}% | 按角色: {token_stats['by_role']}")
+            logger.info(f"📊 第 {iteration + 1} 轮上下文估算: {token_stats['total_tokens']} tokens (消息数: {token_stats['message_count']})")
             
             # 【Lazy Summarization】超过阈值触发批量总结
             if token_stats['total_tokens'] > self.LAZY_SUMMARY_THRESHOLD and not self._summary_triggered:
@@ -516,6 +519,26 @@ class Agent:
             
             # 调用 LLM
             response = self.llm.chat(messages, tools=tools_schema)
+            
+            # 【关键】使用 LLM 返回的真实 token 统计更新
+            real_usage = response.get("usage", {})
+            real_prompt_tokens = real_usage.get("prompt_tokens", 0)
+            real_completion_tokens = real_usage.get("completion_tokens", 0)
+            real_total_tokens = real_usage.get("total_tokens", 0)
+            cached_tokens = real_usage.get("cached_tokens", 0)
+            cache_miss_tokens = real_usage.get("cache_miss_tokens", 0)
+            
+            # 更新统计历史（用真实值覆盖估算值）
+            if self._token_stats_history:
+                self._token_stats_history[-1]["real_prompt_tokens"] = real_prompt_tokens
+                self._token_stats_history[-1]["real_completion_tokens"] = real_completion_tokens
+                self._token_stats_history[-1]["cached_tokens"] = cached_tokens
+                self._token_stats_history[-1]["cache_miss_tokens"] = cache_miss_tokens
+            
+            # 累计真实消耗
+            self._total_tokens_consumed = real_total_tokens
+            
+            logger.info(f"📈 LLM 真实统计: prompt={real_prompt_tokens}, completion={real_completion_tokens}, cached={cached_tokens}, cache_miss={cache_miss_tokens}")
                     
             # 检查是否有工具调用
             if response["tool_calls"]:
@@ -573,15 +596,15 @@ class Agent:
                     # 构建结果内容
                     if result.success:
                         result_content = result.output
-                        logger.info(f"✅ 工具返回成功，原始大小: {len(result_content)} 字符")
+                        logger.info(f"✅ 工具返回成功，原始大小: {estimate_tokens(result_content)} tokens (~{len(result_content)} chars)")
                     else:
                         result_content = f"错误：{result.error}"
                         logger.warning(f"⚠️ 工具返回失败：{result.error}")
                     
-                    # 【核心改进】根据大小决定处理策略
-                    result_size = len(result_content)
+                    # 【核心改进】根据 token 数决定处理策略
+                    result_tokens = estimate_tokens(result_content)
                     
-                    if result_size < self.RAW_THRESHOLD:
+                    if result_tokens < self.RAW_THRESHOLD:
                         # 策略1：小结果 - 直接 raw，不存 artifact
                         tool_message = {
                             "role": "tool",
@@ -589,9 +612,9 @@ class Agent:
                             "content": result_content
                         }
                         artifact_id = None
-                        logger.info(f"📄 小结果直接进 context ({result_size} 字符)")
+                        logger.info(f"📄 小结果直接进 context ({result_tokens} tokens, ~{len(result_content)} chars)")
                         
-                    elif result_size < self.ARTIFACT_BACKUP_THRESHOLD:
+                    elif result_tokens < self.ARTIFACT_THRESHOLD:
                         # 策略2：中等结果 - raw 进 context + artifact 备份
                         artifact_id = self.artifact_store.save(
                             content=result_content,
@@ -611,7 +634,7 @@ class Agent:
                             "content": result_content,
                             "artifact_id": artifact_id  # 标记有备份
                         }
-                        logger.info(f"📄 中等结果 raw 进 context + artifact 备份 ({result_size} 字符, id: {artifact_id})")
+                        logger.info(f"📄 中等结果 raw + artifact 备份 ({result_tokens} tokens, ~{len(result_content)} chars, id: {artifact_id})")
                         
                     else:
                         # 策略3：大结果 - artifact + 轻量级引用
@@ -633,7 +656,7 @@ class Agent:
                             artifact_id=artifact_id,
                             information_need=information_need
                         )
-                        logger.info(f"📦 大结果 artifact 化 ({result_size} 字符 → 引用, id: {artifact_id})")
+                        logger.info(f"📦 大结果 artifact 化 ({result_tokens} tokens, ~{len(result_content)} chars → 引用, id: {artifact_id})")
                     
                     # 给前端显示用（仍显示原始内容）
                     yield {
@@ -648,9 +671,9 @@ class Agent:
                     
                     # 日志：显示处理结果
                     if artifact_id:
-                        saved = len(result_content) - len(tool_message['content'])
+                        saved = estimate_tokens(result_content) - estimate_tokens(tool_message['content'])
                         if saved > 0:
-                            logger.info(f"   💾 已节省 {saved} 字符 ({saved/max(1,len(result_content))*100:.1f}%)")
+                            logger.info(f"   💾 已节省 {saved} tokens ({saved/max(1,estimate_tokens(result_content))*100:.1f}%)")
             
             else:
                 # 没有工具调用，说明 LLM 准备给出最终答案

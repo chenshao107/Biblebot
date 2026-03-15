@@ -98,10 +98,21 @@ class LLMClient:
             choice = result["choices"][0]
             message = choice["message"]
             
+            # 提取 usage 信息（真实 token 统计）
+            usage = result.get("usage", {})
+            
             response_data = {
                 "content": message.get("content"),
                 "tool_calls": message.get("tool_calls"),
-                "finish_reason": choice.get("finish_reason")
+                "finish_reason": choice.get("finish_reason"),
+                # Token 统计（来自 LLM API 真实值）
+                "usage": {
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                    "cached_tokens": usage.get("prompt_tokens_details", {}).get("cached_tokens", 0),
+                    "cache_miss_tokens": usage.get("prompt_cache_miss_tokens", usage.get("prompt_tokens", 0))
+                }
             }
             
             # 保存调试日志
