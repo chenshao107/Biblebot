@@ -13,6 +13,69 @@ from app.agent.prompt_manager import PromptManager
 from app.core.config import settings
 
 
+def estimate_tokens(text: str) -> int:
+    """
+    估算文本的 token 数量
+    中文：1 字 ≈ 1.5 tokens
+    英文：1 词 ≈ 1.3 tokens
+    简化计算：总字符数 / 2
+    """
+    if not text:
+        return 0
+    # 简单估算：平均每个字符约 0.5-1.5 tokens，取保守估计
+    return int(len(text) * 0.6)
+
+
+def calculate_messages_tokens(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    计算 messages 列表的 token 统计信息
+    
+    Returns:
+        {
+            "total_tokens": 总 token 数,
+            "message_count": 消息数量,
+            "by_role": 按角色统计,
+            "details": 每条消息的详情
+        }
+    """
+    total_tokens = 0
+    by_role = {}
+    details = []
+    
+    for i, msg in enumerate(messages):
+        # 提取内容
+        content = ""
+        if isinstance(msg.get("content"), str):
+            content = msg["content"]
+        elif msg.get("tool_calls"):
+            # 工具调用消息
+            for tc in msg["tool_calls"]:
+                content += tc.get("function", {}).get("arguments", "")
+        
+        # 计算 token
+        tokens = estimate_tokens(content)
+        total_tokens += tokens
+        
+        role = msg.get("role", "unknown")
+        by_role[role] = by_role.get(role, 0) + tokens
+        
+        # 记录详情
+        content_preview = content[:100] + "..." if len(content) > 100 else content
+        details.append({
+            "index": i,
+            "role": role,
+            "tokens": tokens,
+            "content_preview": content_preview
+        })
+    
+    return {
+        "total_tokens": total_tokens,
+        "message_count": len(messages),
+        "by_role": by_role,
+        "details": details
+    }
+
+
 class Agent:
     """Agent 核心类"""
     
@@ -24,6 +87,11 @@ class Agent:
         self.knowledge_tree = knowledge_tree
         self.prompt_manager = PromptManager()
         self._stop_event = threading.Event()  # 用于取消当前任务
+        
+        # Token 统计相关
+        self._token_stats_history = []  # 每轮的 token 统计
+        self._total_tokens_consumed = 0  # 累计消耗的 token（估算）
+        self._tool_results_tokens = 0  # 工具结果累计 token
     
     def stop(self):
         """停止当前正在运行的 Agent 任务"""
@@ -147,6 +215,11 @@ class Agent:
         # 重置停止状态
         self.reset()
         
+        # 重置 token 统计
+        self._token_stats_history = []
+        self._total_tokens_consumed = 0
+        self._tool_results_tokens = 0
+        
         # 构建初始消息
         knowledge_tree = self._get_knowledge_tree()
         tools_list = list(self.tools.values())
@@ -210,6 +283,32 @@ class Agent:
                 messages.append({"role": "system", "content": warning_msg})
                 logger.info(f"💡 注入迭代提醒：剩余 {remaining} 次")
                     
+            # 计算并记录当前上下文 token 统计
+            token_stats = calculate_messages_tokens(messages)
+            self._token_stats_history.append({
+                "iteration": iteration + 1,
+                **token_stats
+            })
+            
+            # 累计消耗（估算输入 token）
+            self._total_tokens_consumed += token_stats['total_tokens']
+            
+            # 统计工具结果 token
+            tool_tokens = token_stats['by_role'].get('tool', 0)
+            self._tool_results_tokens += tool_tokens
+            
+            # 计算增长率
+            growth_rate = 0
+            if len(self._token_stats_history) > 1:
+                prev_tokens = self._token_stats_history[-2]['total_tokens']
+                if prev_tokens > 0:
+                    growth_rate = ((token_stats['total_tokens'] - prev_tokens) / prev_tokens) * 100
+            
+            logger.info(f"📊 第 {iteration + 1} 轮上下文统计:")
+            logger.info(f"   当前上下文: {token_stats['total_tokens']} tokens | 消息数: {token_stats['message_count']}")
+            logger.info(f"   累计消耗: {self._total_tokens_consumed} tokens | 工具结果累计: {self._tool_results_tokens} tokens")
+            logger.info(f"   增长率: {growth_rate:+.1f}% | 按角色: {token_stats['by_role']}")
+            
             # 调用 LLM
             response = self.llm.chat(messages, tools=tools_schema)
                     
@@ -278,6 +377,10 @@ class Agent:
                 # 没有工具调用，说明 LLM 准备给出最终答案
                 final_answer = response["content"] or "我无法回答这个问题。"
                 logger.info(f"💡 最终答案：{final_answer[:100]}...")
+                
+                # 输出最终 token 统计报告
+                self._log_final_token_report()
+                
                 yield {
                     "type": "final_answer",
                     "content": final_answer
@@ -286,10 +389,44 @@ class Agent:
         
         # 达到最大迭代次数
         logger.warning(f"⚠️ 达到最大迭代次数 {self.max_iterations}")
+        
+        # 输出最终 token 统计报告
+        self._log_final_token_report()
+        
         yield {
             "type": "final_answer",
             "content": "抱歉，我在尝试多次后仍无法完成这个任务。请尝试简化你的问题。"
         }
+    
+    def _log_final_token_report(self):
+        """输出最终 token 统计报告"""
+        if not self._token_stats_history:
+            return
+        
+        logger.info("=" * 60)
+        logger.info("📈 Token 统计报告")
+        logger.info("=" * 60)
+        logger.info(f"总迭代轮数: {len(self._token_stats_history)}")
+        logger.info(f"累计输入 Token: {self._total_tokens_consumed}")
+        logger.info(f"工具结果累计 Token: {self._tool_results_tokens} ({self._tool_results_tokens/max(1,self._total_tokens_consumed)*100:.1f}%)")
+        
+        # 每轮详情
+        logger.info("-" * 60)
+        logger.info("每轮详情:")
+        for stat in self._token_stats_history:
+            tool_pct = stat['by_role'].get('tool', 0) / max(1, stat['total_tokens']) * 100
+            logger.info(f"  轮次 {stat['iteration']}: {stat['total_tokens']:>6} tokens "
+                       f"(工具占 {tool_pct:>5.1f}%) | 消息 {stat['message_count']} 条")
+        
+        # 趋势分析
+        if len(self._token_stats_history) >= 2:
+            first = self._token_stats_history[0]['total_tokens']
+            last = self._token_stats_history[-1]['total_tokens']
+            total_growth = ((last - first) / max(1, first)) * 100
+            logger.info("-" * 60)
+            logger.info(f"上下文膨胀: {first} → {last} tokens (+{total_growth:.1f}%)")
+        
+        logger.info("=" * 60)
 
 
 class AgentResponse:
