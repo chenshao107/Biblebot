@@ -10,6 +10,7 @@ from loguru import logger
 from app.agent.llm import LLMClient
 from app.agent.tools.base import BaseTool, ToolResult
 from app.agent.prompt_manager import PromptManager
+from app.agent.artifact_store import ArtifactStore, ArtifactMessageBuilder, get_artifact_store
 from app.core.config import settings
 
 
@@ -92,6 +93,10 @@ class Agent:
         self._token_stats_history = []  # 每轮的 token 统计
         self._total_tokens_consumed = 0  # 累计消耗的 token（估算）
         self._tool_results_tokens = 0  # 工具结果累计 token
+        
+        # Artifact 存储
+        self.artifact_store = get_artifact_store()
+        self.artifact_builder = ArtifactMessageBuilder(self.artifact_store)
     
     def stop(self):
         """停止当前正在运行的 Agent 任务"""
@@ -219,6 +224,12 @@ class Agent:
         self._token_stats_history = []
         self._total_tokens_consumed = 0
         self._tool_results_tokens = 0
+        
+        # 重置 ArtifactStore（每个任务独立）
+        from app.agent.artifact_store import reset_artifact_store
+        reset_artifact_store()
+        self.artifact_store = get_artifact_store()
+        self.artifact_builder = ArtifactMessageBuilder(self.artifact_store)
         
         # 构建初始消息
         knowledge_tree = self._get_knowledge_tree()
@@ -355,23 +366,41 @@ class Agent:
                     # 构建结果内容
                     if result.success:
                         result_content = result.output
-                        logger.info(f"✅ 工具返回成功")
+                        logger.info(f"✅ 工具返回成功，原始大小: {len(result_content)} 字符")
                     else:
                         result_content = f"错误：{result.error}"
                         logger.warning(f"⚠️ 工具返回失败：{result.error}")
-                                        
+                    
+                    # 【Artifact 模式】工具结果存入 ArtifactStore，messages 只放引用
+                    artifact_id = self.artifact_store.save(
+                        content=result_content,
+                        artifact_type="tool_result",
+                        metadata={
+                            "tool_name": tc["name"],
+                            "tool_args": tc["arguments"],
+                            "success": result.success
+                        }
+                    )
+                    
+                    # 构建引用消息（大幅减小 token）
+                    tool_message = self.artifact_builder.build_tool_result_message(
+                        tool_call_id=tc["id"],
+                        tool_name=tc["name"],
+                        artifact_id=artifact_id
+                    )
+                    
+                    # 给前端显示用（仍显示原始内容）
                     yield {
                         "type": "tool_result",
-                        "content": result_content,
-                        "tool_name": tc["name"]
+                        "content": result_content,  # 前端仍显示完整内容
+                        "tool_name": tc["name"],
+                        "artifact_id": artifact_id  # 附加 artifact_id
                     }
                     
-                    # 添加工具结果到消息
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc["id"],
-                        "content": result_content
-                    })
+                    # 添加工具结果到消息（使用 artifact 引用）
+                    messages.append(tool_message)
+                    
+                    logger.info(f"📦 Artifact 已创建: {artifact_id}，消息大小从 {len(result_content)} 降至 {len(tool_message['content'])} 字符")
             
             else:
                 # 没有工具调用，说明 LLM 准备给出最终答案
@@ -409,6 +438,20 @@ class Agent:
         logger.info(f"总迭代轮数: {len(self._token_stats_history)}")
         logger.info(f"累计输入 Token: {self._total_tokens_consumed}")
         logger.info(f"工具结果累计 Token: {self._tool_results_tokens} ({self._tool_results_tokens/max(1,self._total_tokens_consumed)*100:.1f}%)")
+        
+        # Artifact 统计
+        art_stats = self.artifact_store.get_stats()
+        logger.info("-" * 60)
+        logger.info(f"📦 Artifact 存储统计:")
+        logger.info(f"   存储数量: {art_stats['count']} | 总 Token: {art_stats['total_tokens']} | 大小: {art_stats['total_size_mb']} MB")
+        logger.info(f"   类型分布: {art_stats['by_type']}")
+        
+        # 估算节省的 token
+        if art_stats['count'] > 0:
+            # 假设每个 artifact 如果不压缩会全部进 messages
+            saved_tokens = art_stats['total_tokens'] - (art_stats['count'] * 200)  # 200 是引用平均大小
+            saved_pct = saved_tokens / max(1, self._total_tokens_consumed) * 100
+            logger.info(f"   💡 估算节省: ~{saved_tokens} tokens ({saved_pct:.1f}%)")
         
         # 每轮详情
         logger.info("-" * 60)
