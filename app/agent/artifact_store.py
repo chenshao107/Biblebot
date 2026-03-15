@@ -15,6 +15,7 @@ class Artifact:
     id: str
     type: str  # "tool_result", "file", "search_result" 等
     content: str
+    summary: str  # LLM 生成的语义摘要
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     @property
@@ -23,9 +24,20 @@ class Artifact:
         return int(len(self.content) * 0.6)
     
     @property
+    def summary_token_count(self) -> int:
+        """摘要的 token 数量"""
+        return int(len(self.summary) * 0.6)
+    
+    @property
     def size(self) -> int:
         """内容字节数"""
         return len(self.content.encode('utf-8'))
+    
+    def get_display_content(self, use_summary: bool = True) -> str:
+        """获取显示内容，优先使用摘要"""
+        if use_summary and self.summary:
+            return self.summary
+        return self.content
 
 
 class ArtifactStore:
@@ -42,14 +54,15 @@ class ArtifactStore:
         self._access_count: Dict[str, int] = {}  # 访问计数，用于 LRU
         
     def save(self, content: str, artifact_type: str = "tool_result", 
-             metadata: Dict[str, Any] = None) -> str:
+             metadata: Dict[str, Any] = None, summary: str = None) -> str:
         """
         保存内容到 ArtifactStore，返回 artifact_id
         
         Args:
             content: 内容文本
             artifact_type: 类型标记
-            metadata: 元数据（如工具名、调用时间等）
+            metadata: 元数据（如工具名、调用目的、调用时间等）
+            summary: 预生成的语义摘要（可选）
             
         Returns:
             artifact_id: 唯一标识符
@@ -61,6 +74,7 @@ class ArtifactStore:
             id=artifact_id,
             type=artifact_type,
             content=content,
+            summary=summary or "",  # 可能为空，需要后续生成
             metadata=metadata or {}
         )
         
@@ -70,7 +84,7 @@ class ArtifactStore:
         # 清理旧 artifact
         self._cleanup_if_needed()
         
-        logger.debug(f"Artifact 已保存: {artifact_id} ({artifact.token_count} tokens)")
+        logger.debug(f"Artifact 已保存: {artifact_id} (内容{artifact.token_count} tokens, 摘要{artifact.summary_token_count} tokens)")
         return artifact_id
     
     def get(self, artifact_id: str) -> Optional[Artifact]:
@@ -89,20 +103,24 @@ class ArtifactStore:
     def get_summary(self, artifact_id: str, max_length: int = 500) -> str:
         """
         获取 artifact 摘要
-        如果内容过长，返回前 max_length 字符 + 提示
+        优先返回 LLM 生成的语义摘要，否则返回截断内容
         """
         artifact = self.get(artifact_id)
         if not artifact:
             return f"[Artifact {artifact_id} 不存在]"
         
+        # 优先使用 LLM 生成的语义摘要
+        if artifact.summary:
+            return artifact.summary
+        
+        # 退化为截断摘要
         content = artifact.content
         if len(content) <= max_length:
             return content
         
-        # 返回摘要
         summary = content[:max_length]
         remaining = len(content) - max_length
-        return f"{summary}\n... [还有 {remaining} 字符，使用 artifact_id='{artifact_id}' 获取完整内容]"
+        return f"{summary}\n... [还有 {remaining} 字符，使用 load_artifact('{artifact_id}') 获取完整内容]"
     
     def exists(self, artifact_id: str) -> bool:
         """检查 artifact 是否存在"""
@@ -161,11 +179,12 @@ class ArtifactMessageBuilder:
         self.store = artifact_store
     
     def build_tool_result_message(self, tool_call_id: str, tool_name: str, 
-                                   artifact_id: str) -> Dict[str, Any]:
+                                   artifact_id: str, information_need: str = "") -> Dict[str, Any]:
         """
-        构建工具结果消息（引用 artifact）
+        构建工具结果消息（轻量级引用）
         
-        替代原来的直接塞 content，现在只放 artifact_id
+        不塞摘要，只放 artifact_id 和元数据
+        LLM 需要时可以通过 retrieve_artifact 获取
         """
         artifact = self.store.get(artifact_id)
         if not artifact:
@@ -175,25 +194,28 @@ class ArtifactMessageBuilder:
                 "content": f"[错误：找不到 artifact {artifact_id}]"
             }
         
-        # 构建引用格式的内容
-        # 包含 artifact_id、摘要、统计信息
-        summary = self.store.get_summary(artifact_id, max_length=800)
+        # 轻量级引用格式 - 只包含关键元数据
+        content_parts = [
+            f"【工具结果已存储】",
+            f"artifact_id: {artifact_id}",
+            f"工具: {tool_name}",
+        ]
         
-        content = (
-            f"【工具结果已存储为 Artifact】\n"
-            f"artifact_id: {artifact_id}\n"
-            f"工具: {tool_name}\n"
-            f"类型: {artifact.type}\n"
-            f"大小: {artifact.token_count} tokens\n"
-            f"---\n"
-            f"{summary}"
-        )
+        if information_need:
+            content_parts.append(f"信息需求: {information_need[:100]}")
+        
+        content_parts.extend([
+            f"大小: {artifact.token_count} tokens",
+            f"",
+            f"如需查看内容，请使用：retrieve_artifact('{artifact_id}')",
+        ])
         
         return {
             "role": "tool",
             "tool_call_id": tool_call_id,
-            "content": content,
-            "artifact_id": artifact_id  # 额外字段，便于后续处理
+            "content": "\n".join(content_parts),
+            "artifact_id": artifact_id,
+            "information_need": information_need  # 保留信息需求，便于后续检索
         }
     
     def expand_artifact_in_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
