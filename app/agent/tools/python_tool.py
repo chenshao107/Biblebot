@@ -14,48 +14,25 @@ from app.core.config import settings
 class PythonTool(BaseTool):
     """Python 代码执行工具"""
     
+    # 受限模式中禁止使用的危险内建函数
+    _BLOCKED_BUILTINS = {
+        "__import__", "eval", "exec", "compile",
+        "open",  # 会在下面单独放回
+        "input", "memoryview",
+        "breakpoint",
+    }
+
     def __init__(self, timeout: int = None):
         self.timeout = timeout or 30  # 从配置读取或默认 30 秒
-        # 预定义的安全全局变量
+        # 使用完整 builtins 并移除危险函数，避免生成器/列表推导式作用域问题
+        import builtins
+        safe_builtins = vars(builtins).copy()
+        for name in self._BLOCKED_BUILTINS:
+            safe_builtins.pop(name, None)
+        # 单独允许 open（只读文件）
+        safe_builtins["open"] = open
         self.safe_globals = {
-            "__builtins__": {
-                # 基础函数
-                "print": print,
-                "len": len,
-                "range": range,
-                "enumerate": enumerate,
-                "zip": zip,
-                "map": map,
-                "filter": filter,
-                "sorted": sorted,
-                "reversed": reversed,
-                "list": list,
-                "dict": dict,
-                "set": set,
-                "tuple": tuple,
-                "str": str,
-                "int": int,
-                "float": float,
-                "bool": bool,
-                "type": type,
-                "isinstance": isinstance,
-                "hasattr": hasattr,
-                "getattr": getattr,
-                "sum": sum,
-                "min": min,
-                "max": max,
-                "abs": abs,
-                "round": round,
-                "any": any,
-                "all": all,
-                "open": open,  # 允许读取文件
-                # 异常
-                "Exception": Exception,
-                "ValueError": ValueError,
-                "TypeError": TypeError,
-                "KeyError": KeyError,
-                "IndexError": IndexError,
-            }
+            "__builtins__": safe_builtins,
         }
     
     @property
