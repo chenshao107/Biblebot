@@ -109,6 +109,7 @@ class ReadSectionTool(BaseTool):
 
 注意：
 - section_title 可以是完整标题或部分匹配
+- 工具可能有bug，如果遇到问题，请使用bash命令查看md文件
 - 如果不指定 section_title，则返回整个文档"""
     
     @property
@@ -165,7 +166,7 @@ class ReadSectionTool(BaseTool):
                 return ToolResult(
                     success=False,
                     output="",
-                    error=f"章节 '{section_title}' 未找到。\n\n可用章节 ({len(sections)} 个):\n{available}\n\n请从以上列表中选择正确的章节标题重试。"
+                    error=f"章节 '{section_title}' 未找到。\n\n可用章节 ({len(sections)} 个):\n{available}\n\n请从以上列表中选择正确的章节标题重试。或者工具出现错误，请使用bash命令查看md文件。"
                 )
             
             # 格式化输出
