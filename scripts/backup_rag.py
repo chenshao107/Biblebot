@@ -79,7 +79,8 @@ def create_qdrant_snapshot(output_path: str = None) -> str:
     Returns:
         snapshot 文件路径
     """
-    client = get_qdrant_client()
+    # snapshot 操作耗时较长，使用更大的超时时间（600秒）
+    client = QdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT, timeout=600)
     
     try:
         # 创建 snapshot
