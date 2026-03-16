@@ -8,7 +8,6 @@
 - 🤖 **AI Agent**: LLM + 工具调用（RAG/Bash/Python/Web Search）
 - 📄 **多格式支持**: PDF/Word/Excel/PPT/Markdown 等通过 Docling 转换
 - 🛡️ **安全机制**: Bash 命令白名单、Python 沙箱、路径限制
-- ⚡ **高性能**: 支持本地模型和 API 部署，灵活配置
 
 ---
 
@@ -18,41 +17,16 @@
 biblebot/
 ├── app/
 │   ├── api/                # API 层：FastAPI 路由定义
-│   │   └── routes.py       # 定义 /api/agent, /api/query 等接口
 │   ├── core/               # 核心配置：Pydantic 环境校验
-│   │   └── config.py       # 统一管理 .env 和默认值
-│   ├── agent/              # Agent 核心模块（新增）
-│   │   ├── agent.py        # Agent 核心（LLM + 循环 + 工具调用）
-│   │   ├── llm.py          # LLM 客户端封装
-│   │   └── tools/          # 工具集合
-│   │       ├── base.py     # 工具基类
-│   │       ├── rag_tool.py # RAG 检索工具
-│   │       ├── bash_tool.py# Bash 命令工具
-│   │       ├── python_tool.py  # Python 执行工具
-│   │       ├── web_search_tool.py  # 网络搜索工具
-│   │       └── calculator_tool.py  # 计算器工具
+│   ├── agent/              # Agent 核心模块
 │   ├── services/           # 业务逻辑层
-│   │   ├── ingestion/      # 文档摄取管道
-│   │   │   ├── converter.py# Docling 多格式转换逻辑
-│   │   │   └── chunker.py  # Markdown 语义切片
-│   │   ├── storage/        # 存储层
-│   │   │   └── qdrant_client.py # Qdrant 混合索引与检索
-│   │   └── rag/            # RAG 核心算法
-│   │       ├── embedder.py # 稠密/稀疏向量生成 (支持 API/本地)
-│   │       ├── query_rewriter.py # LLM 查询改写逻辑
-│   │       ├── retriever.py# 检索编排（核心入口）
-│   │       └── reranker.py # 结果精排 (支持 API/本地)
 │   └── main.py             # 程序入口
 ├── docs/                   # 文档（新增）
-│   ├── agent_architecture.md  # Agent 架构设计
-│   └── agent_examples.md      # Agent 使用示例
 ├── examples/               # 示例代码（新增）
-│   └── custom_tools_example.py  # 自定义工具示例
 ├── data/                   # 数据存储
 │   ├── raw/                # 原始文档存放处
 │   └── canonical_md/       # 转换后的规范化 Markdown
 ├── docker/                 # 基础设施
-│   └── docker-compose.yml  # Qdrant 容器配置
 ├── scripts/                # 运维脚本
 │   ├── ingest_folder.py    # 批量导入本地文档工具
 │   └── agent_cli.py        # Agent 命令行交互测试
