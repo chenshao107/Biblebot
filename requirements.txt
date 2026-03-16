@@ -20,4 +20,5 @@ aiohttp
 
 # MCP (Model Context Protocol) 支持
 # 注意：MCP 服务器需要通过 npx 或 uvx 安装，请确保系统已安装 Node.js 和 Python
+mcp>=1.0.0
 nest_asyncio

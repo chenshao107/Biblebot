@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     # 示例: {"filesystem": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/data"]}, "fetch": {"command": "uvx", "args": ["mcp-server-fetch"]}}
     MCP_SERVERS_CONFIG: Optional[str] = None  # MCP 服务器配置 JSON 字符串
     ENABLE_MCP_TOOLS: bool = False  # 是否启用 MCP 工具
+    
+    # Agent MCP 服务器配置
+    AGENT_MCP_SERVER_NAME: str = "biblebot-agent"  # MCP 服务器名称
+    AGENT_MCP_ENABLED: bool = True  # 是否启用 Agent MCP 服务器
+    AGENT_MCP_HOST: str = "0.0.0.0"  # HTTP MCP 服务器主机
+    AGENT_MCP_PORT: int = 8001  # HTTP MCP 服务器端口
 
     # Pydantic 配置：自动读取 .env 文件
     model_config = SettingsConfigDict(
