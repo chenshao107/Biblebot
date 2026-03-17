@@ -62,13 +62,13 @@ class MCPClient:
         
         try:
             # 启动 MCP 服务器进程
+            # 注意：使用二进制模式而非 text=True，避免缓冲问题
             env = {**os.environ, **self.env} if self.env else None
             self.process = subprocess.Popen(
                 [self.command] + self.args,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
                 env=env
             )
             
@@ -113,7 +113,8 @@ class MCPClient:
         
         try:
             # 发送请求（加锁保证并发安全）
-            request_line = json.dumps(request) + "\n"
+            # 使用二进制模式写入
+            request_line = (json.dumps(request) + "\n").encode('utf-8')
             
             with self._lock:
                 # 检查进程仍然存活
@@ -148,6 +149,10 @@ class MCPClient:
                     return None
             
             # 解析响应（在锁外进行）
+            # 将二进制响应解码为字符串
+            if isinstance(response_line, bytes):
+                response_line = response_line.decode('utf-8')
+            
             if not response_line:
                 # 读取 stderr 获取错误信息
                 stderr_data = ""
@@ -155,7 +160,11 @@ class MCPClient:
                     # 非阻塞读取 stderr
                     import select
                     if select.select([self.process.stderr], [], [], 0.1)[0]:
-                        stderr_data = self.process.stderr.readline()
+                        stderr_bytes = self.process.stderr.readline()
+                        if isinstance(stderr_bytes, bytes):
+                            stderr_data = stderr_bytes.decode('utf-8', errors='replace')
+                        else:
+                            stderr_data = stderr_bytes
                 except:
                     pass
                 
