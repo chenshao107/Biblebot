@@ -17,6 +17,17 @@ import sys
 import os
 from pathlib import Path
 
+# 自动检测并激活虚拟环境
+_PROJECT_DIR = Path(__file__).resolve().parent
+_VENV_PYTHON = _PROJECT_DIR / ".venv" / "bin" / "python"
+if _VENV_PYTHON.exists():
+    # 重新以 venv Python 执行当前脚本
+    if sys.executable != str(_VENV_PYTHON):
+        os.execv(str(_VENV_PYTHON), [_VENV_PYTHON, __file__] + sys.argv[1:])
+    # 确保 venv 的 bin 在 PATH 中
+    venv_bin = str(_VENV_PYTHON.parent)
+    os.environ["PATH"] = venv_bin + os.pathsep + os.environ.get("PATH", "")
+
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
@@ -56,10 +67,12 @@ def start_rag_server(debug=False):
         print(f"\n{YELLOW}Server stopped{RESET}")
 
 
+VENV_PYTHON = ".venv/bin/python"
+
 SYSTEM_PROMPT = (
     "You are an enterprise knowledge exploration agent. "
     "You have access to a knowledge base at data/canonical_md (Markdown files). "
-    "Use 'python scripts/rag_search.py \"query\"' to semantically search the knowledge base for candidate documents. "
+    f"Use '{VENV_PYTHON} scripts/rag_search.py \"query\"' to semantically search the knowledge base for candidate documents. "
     "RAG search returns file paths and snippets — it only LOCATES documents, it does NOT give you the full answer. "
     "After locating candidate documents, use Bash (cat, grep, head, tail, rg, find, tree) to READ and EXPLORE the actual files. "
     "Workflow: rag_search → locate → bash explore → refine → answer. "
