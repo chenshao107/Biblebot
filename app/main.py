@@ -4,9 +4,9 @@ from app.api.routes import router
 import uvicorn
 
 app = FastAPI(
-    title="Knowledge Agent Server",
-    description="基于 Agent 的智能知识服务，支持 RAG 检索、Bash 命令和 Python 执行",
-    version="2.0.0"
+    title="Biblebot Knowledge Server",
+    description="企业知识库 RAG 检索服务。Agent Runtime 支持 Qoder CLI / Claude CLI。",
+    version="3.0.0"
 )
 
 # CORS 配置
@@ -18,20 +18,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# OpenAI 兼容接口（根路径，供外部 UI 使用）
 app.include_router(router)
-
-# 原有 API（保留兼容）
 app.include_router(router, prefix="/api")
 
 @app.get("/")
 async def root():
     return {
-        "message": "Knowledge Agent Server is running.",
-        "version": "2.0.0",
+        "message": "Biblebot Knowledge Server is running.",
+        "version": "3.0.0",
+        "architecture": "轻RAG + 强探索",
+        "agent_runtime": "Qoder CLI (default) / Claude CLI",
         "endpoints": {
-            "agent": "/api/agent - Agent 查询（主推）",
-            "rag": "/api/query - RAG 检索（快速）"
+            "rag": "/api/query - RAG 语义检索",
+            "docs": "/docs - API 文档",
+        },
+        "cli_tools": {
+            "rag_search": "python scripts/rag_search.py '查询词'",
         }
     }
 
