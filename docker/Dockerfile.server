@@ -24,8 +24,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # 依赖安装
+# 国内默认用清华镜像加速，海外可通过 --build-arg PIP_INDEX=https://pypi.org/simple 覆盖
+ARG PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -i ${PIP_INDEX} --trusted-host pypi.tuna.tsinghua.edu.cn -r requirements.txt
 
 # 应用代码
 COPY app/ ./app/

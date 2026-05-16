@@ -24,9 +24,16 @@
 ### 1. 环境准备
 
 ```bash
+python3 -m venv .venv && source .venv/bin/activate  # 创建虚拟环境
 pip install -r requirements.txt
 cp .env.example .env   # 编辑 .env 填入 LLM API Key 等配置
 ```
+
+> **国内用户**：Docker 需配置 registry mirror 才能拉取基础镜像：
+> ```bash
+> sudo tee /etc/docker/daemon.json <<< '{"registry-mirrors":["https://docker.1ms.run"]}'
+> sudo systemctl restart docker
+> ```
 
 ### 2. 启动 Qdrant
 
@@ -131,8 +138,8 @@ Agent 的标准探索流程：
 | `EMBEDDING_API_KEY` | Embedding API 密钥 |
 | `EMBEDDING_BASE_URL` | Embedding API 地址 |
 | `EMBEDDING_MODEL` | Embedding 模型 |
-| `QDRANT_URL` | Qdrant 服务地址 |
-| `QDRANT_API_KEY` | Qdrant API 密钥 |
+| `QDRANT_HOST` | Qdrant 服务地址 |
+| `QDRANT_PORT` | Qdrant 端口（默认 6333） |
 | `RERANK_API_KEY` | Rerank API 密钥 |
 | `RERANK_BASE_URL` | Rerank API 地址 |
 | `RERANK_MODEL` | Rerank 模型 |
@@ -147,3 +154,5 @@ docker-compose up -d   # 启动 Qdrant + Biblebot RAG 服务
 `docker-compose.yml` 包含两个服务：
 - **qdrant**: 向量数据库
 - **biblebot**: RAG 检索服务 + 知识库只读挂载
+
+> 首次构建需下载 PyTorch（~2GB），国内默认走清华 pip 镜像。构建完成后访问 `http://localhost:8000/docs` 测试 API。

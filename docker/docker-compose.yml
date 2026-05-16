@@ -44,6 +44,8 @@ services:
       - ../.env:/app/.env:ro
       # 模型缓存
       - model-cache:/root/.cache
+    env_file:
+      - ../.env
     environment:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
