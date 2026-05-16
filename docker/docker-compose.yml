@@ -64,4 +64,5 @@ volumes:
 
 networks:
   biblebot-net:
-    driver: bridge
+    external: true
+    name: docker_default
